@@ -5,14 +5,25 @@ This repository contains a simple CLI utility with a number of useful sub-comman
 
 ## Installation
 
-Download a binary from our release-page, or build from source.
-
-Once installed you'll find the binary `aws-utils`, which you can execute from your shell.
-
-There is support for bash-completion, to enable this add the following to your bash startup-file:
+If you the golang development tools installed upon your host, and you're running a recent version, you should be able to download and install via:
 
 ```
-        source <(aws-utils bash-completion)
+go install github.com/skx/aws-list@latest
+```
+
+Or, after having cloned [this repository](https://github.com/skx/aws-utils) to your system, you can build from source with a simple:
+
+```
+go build .
+go install .
+```
+
+If you don't wish to build from source you should be able to find precompiled binaries for several operating systems upon our [releases page](https://github.com/skx/aws-utils/releases/)
+
+The binary contains embedded support for bash-completion, to enable this add the following to your bash startup-file:
+
+```
+source <(aws-utils bash-completion)
 ```
 
 
@@ -22,11 +33,11 @@ There is support for bash-completion, to enable this add the following to your b
 
 All of the commands accept the use of AWS credentials in the way you'd expect, be it from `~/.aws/credentials` or via the use of environmental-variables:
 
-* AWS_SECRET_ACCESS_KEY
-* AWS_ACCESS_KEY_ID
-* AWS_SESSION_TOKEN
+* `AWS_SECRET_ACCESS_KEY`
+* `AWS_ACCESS_KEY_ID`
+* `AWS_SESSION_TOKEN`
   * For the cases when you're using assume-role.
-* AWS_REGION
+* `AWS_REGION`
   * The region to use.
 
 This is documented in the Golang SDK page:
@@ -38,7 +49,7 @@ Many of the utilities also allow you to operate the same functionality upon an a
 For example:
 
 ```
-aws csv-instances -roles=/path/to/roles
+$ aws-utils csv-instances -roles=/path/to/roles
 ```
 
 The format of the file is one-role per line, such as:
@@ -49,8 +60,7 @@ arn:aws:iam::123457000002:role/foo-AdministratorAccessFromInt-2ABCDEFGHIJKL
 arn:aws:iam::123457000003:role/tst-AdministratorAccessFromInt-3ABCDEFGHIJKL
 arn:aws:iam::123457000004:role/tst-AdministratorAccessFromInt-4ABCDEFGHIJKL
 
-# Lines prefixed with "#" are comments, and are ignored.
-
+# Lines prefixed with "#" are comments, and are ignored (as are empty-lines).
 ```
 
 
