@@ -8,7 +8,7 @@ This repository contains a simple CLI utility with a number of useful sub-comman
 If you the golang development tools installed upon your host, and you're running a recent version, you should be able to download and install via:
 
 ```
-go install github.com/skx/aws-list@latest
+go install github.com/skx/aws-utils@latest
 ```
 
 Or, after having cloned [this repository](https://github.com/skx/aws-utils) to your system, you can build from source with a simple:
