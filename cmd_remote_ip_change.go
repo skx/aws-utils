@@ -254,19 +254,10 @@ func (i *remoteIPChangeCommand) Execute(args []string) int {
 	}
 	fmt.Printf("Your remote IP is %s\n", ip)
 
-	// Connect to AWS
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("eu-central-1")},
-	)
-	if err != nil {
-		fmt.Printf("Error creating AWS client: %s\n", err)
-		return 1
-	}
-
 	// Create a new AWS session
-	sess, err2 := session.NewSession(&aws.Config{})
-	if err2 != nil {
-		fmt.Printf("AWS login failed: %s\n", err2.Error())
+	sess, err := session.NewSession(&aws.Config{})
+	if err != nil {
+		fmt.Printf("AWS login failed: %s\n", err.Error())
 		return 1
 	}
 
