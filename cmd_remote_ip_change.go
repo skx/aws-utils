@@ -39,7 +39,7 @@ type remoteIPChangeCommand struct {
 
 // Info returns the name of this subcommand.
 func (i *remoteIPChangeCommand) Info() (string, string) {
-	return "remote-ip-change", `Update security-groups with your external IP
+	return "remote-ip-change", `Update security-groups with your external IP.
 
 Details:
 
@@ -49,19 +49,33 @@ This command allows you to quickly and easily update those.
 You should provide a configuration file containing:
 
 * The security-group IDs
-* The term to find the rules.
+* The description to use for the rule.
+* The port to open in the security-group rule.
+* Optionally you may specify the ARN of an AWS role to assume.
 
-For example:
+For example the following would be a good input file:
 
-[ { SG: "sg-12345", Pattern: "steve-home" }, ]
+[
+    {
+        "SG": "sg-12345",
+        "Name": "[aws-utils] steve home",
+        "Port": 443
+    },
+    {
+        "SG": "sg-abcdef",
+        "Name": "[aws-utils] steve home",
+        "Role": "arn:aws:iam::112233445566:role/devops-access-abcdef",
+        "Port": 443
+    }
+
+]
 
 When executed this command will then iterate over the rules contained in
-the specified security-group, and update the ones that match the given
-pattern to contain your current remote IP.
+the specified security-group, and remove any existing rule with the same name,
+before adding a new rule with your current IP.
 
-You will be given an opportunity to confirm the change before it is made.
-
-NOTE: This only updates/examines Ingress Rules - Egress Rules are left alone.
+NOTE: This only examines Ingress Rules, there are no changes made to Egress
+rules.
 `
 
 }
