@@ -131,6 +131,7 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) (
 						CidrIp: aws.String(mmyip),
 					}}
 				}
+
 				// Look for the description which is ours
 				if mdesc == *ipr.Description {
 					flag = true
@@ -190,6 +191,7 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 
 	svc := ec2.New(sess)
 
+	// If we have a role then use it.
 	if entry.Role != "" {
 		// process
 		creds := stscreds.NewCredentials(sess, entry.Role)
@@ -197,6 +199,10 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 		// Create service client value configured for credentials
 		// from assumed role.
 		svc = ec2.New(sess, &aws.Config{Credentials: creds})
+	}
+
+	if entry.Port == 0 {
+		entry.Port = 443
 	}
 
 	fmt.Printf("\n")
