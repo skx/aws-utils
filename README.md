@@ -71,6 +71,7 @@ The following sub-commands are available:
 
 * [csv-instances](#csv-instances)
 * [instances](#instances)
+* [remote-ip-change](#remote-ip-change)
 * [sg-grep](#sg-grep)
 * [whoami](#whoami)
 
@@ -106,6 +107,37 @@ i-01066633e12345567 - prod-fooapp-uk
 	State: running
 	Volumes:
 		/dev/sda1	vol-01234567890abcdef	100Gb	gp2	Encrypted:true	IOPs:300
+```
+
+
+
+### `remote-ip-change`
+
+This sub-command allows you to quickly update Ingress rules, with your current external IP address.
+
+Imagine you have a number of security-groups which permit access to resources via a small list of permitted source IPs this command will let you update your own entry in that list easily.
+
+Sample input file:
+
+```
+$ cat input.json
+[
+  { "SG": "sg-12344", "Name": "[aws-utils] Steve's Home IP", "Port": 443 },
+  { "SG": "sg-12345", "Name": "[aws-utils] Steve's Home IP", "Port": 22 }
+]
+```
+
+It is possible to specify a single port, but the protocol (TCP) is hardcoded.
+
+```
+$ ./aws-utils remote-ip-change ./prod.json
+Your remote IP is 191.145.83.183/32
+  SecurityGroupID: sg-12344
+  IP:              191.145.83.183/32
+  Port:            443
+  Description:     [aws-utils] Steve's Home IP
+  Found existing entry, and deleted it
+  Added entry with current details
 ```
 
 

@@ -36,6 +36,7 @@ func main() {
 	//
 	subcommands.Register(&csvInstancesCommand{})
 	subcommands.Register(&instancesCommand{})
+	subcommands.Register(&remoteIPChangeCommand{})
 	subcommands.Register(&sgGrepCommand{})
 	subcommands.Register(&whoamiCommand{})
 
