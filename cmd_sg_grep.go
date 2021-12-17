@@ -36,7 +36,7 @@ This command allows you to run grep against security-groups.
 
 }
 
-// Execute is invoked if the user specifies `sg-grep` as the subcommand.
+// Execute is invoked if the user specifies this sub-command.
 func (i *sgGrepCommand) Execute(args []string) int {
 
 	if len(args) < 1 {

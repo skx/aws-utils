@@ -213,7 +213,7 @@ func readBlockDevicesFromInstance(instance *ec2.Instance, conn *ec2.EC2) (map[st
 	return blockDevices, nil
 }
 
-// Execute is invoked if the user specifies `install` as the subcommand.
+// Execute is invoked if the user specifies this subcommand.
 func (c *instancesCommand) Execute(args []string) int {
 
 	//

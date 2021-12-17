@@ -172,7 +172,7 @@ func Sync(svc *ec2.EC2, acct string) error {
 	return nil
 }
 
-// Execute is invoked if the user specifies `install` as the subcommand.
+// Execute is invoked if the user specifies this subcommand.
 func (c *csvInstancesCommand) Execute(args []string) int {
 
 	//

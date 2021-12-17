@@ -89,7 +89,7 @@ func getAccountAlias(svc iamiface.IAMAPI) (alias string) {
 	return
 }
 
-// Execute is invoked if the user specifies `install` as the subcommand.
+// Execute is invoked if the user specifies this sub-command.
 func (i *whoamiCommand) Execute(args []string) int {
 
 	// Start a session
