@@ -104,7 +104,7 @@ func getIP() (string, error) {
 
 }
 
-func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string) (bool, error) {
+func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) (bool, error) {
 
 	// Get the contents of the group.
 	current, err := svc.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
@@ -148,8 +148,8 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string) (bool, error)
 					GroupId: aws.String(groupid),
 					IpPermissions: []*ec2.IpPermission{{
 						IpProtocol: aws.String("tcp"),
-						FromPort:   aws.Int64(443),
-						ToPort:     aws.Int64(443),
+						FromPort:   aws.Int64(port),
+						ToPort:     aws.Int64(port),
 						IpRanges:   ipranges,
 					}},
 				})
@@ -163,15 +163,15 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string) (bool, error)
 	return false, nil
 }
 
-func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string) error {
+func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) error {
 
 	// Add the entry to the group
 	var err error
 	_, err = svc.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
 		GroupId: aws.String(groupid),
 		IpPermissions: []*ec2.IpPermission{{
-			FromPort:   aws.Int64(443),
-			ToPort:     aws.Int64(443),
+			FromPort:   aws.Int64(port),
+			ToPort:     aws.Int64(port),
 			IpProtocol: aws.String("tcp"),
 			IpRanges: []*ec2.IpRange{{
 				CidrIp:      aws.String(mmyip),
@@ -199,12 +199,15 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 		svc = ec2.New(sess, &aws.Config{Credentials: creds})
 	}
 
+	fmt.Printf("\n")
 	fmt.Printf("  SecurityGroupID: %s\n", entry.SG)
 	fmt.Printf("  IP:              %s\n", ip)
 	fmt.Printf("  Port:            %d\n", entry.Port)
 	fmt.Printf("  Description:     %s\n", entry.Name)
-
-	deleted, err := myIPDeleteCurrent(svc, entry.SG, ip, entry.Name)
+	if entry.Role != "" {
+		fmt.Printf("  Role:            %s\n", entry.Role)
+	}
+	deleted, err := myIPDeleteCurrent(svc, entry.SG, ip, entry.Name, int64(entry.Port))
 	if err != nil {
 		return err
 	}
@@ -212,7 +215,7 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 		fmt.Printf("  Found existing entry, and deleted it\n")
 	}
 
-	err = myIPAdd(svc, entry.SG, ip, entry.Name)
+	err = myIPAdd(svc, entry.SG, ip, entry.Name, int64(entry.Port))
 	if err != nil {
 		return err
 	}
