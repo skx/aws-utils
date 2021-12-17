@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
@@ -171,7 +172,18 @@ func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string) error {
 }
 
 // Handle a change here
-func handleSecurityGroup(entry ToChange, svc *ec2.EC2, ip string) error {
+func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error {
+
+	svc := ec2.New(sess)
+
+	if entry.Role != "" {
+		// process
+		creds := stscreds.NewCredentials(sess, entry.Role)
+
+		// Create service client value configured for credentials
+		// from assumed role.
+		svc = ec2.New(sess, &aws.Config{Credentials: creds})
+	}
 
 	fmt.Printf("  SecurityGroupID: %s\n", entry.SG)
 	fmt.Printf("  IP:              %s\n", ip)
@@ -237,12 +249,16 @@ func (i *remoteIPChangeCommand) Execute(args []string) int {
 		return 1
 	}
 
-	// Create an EC2 service client.
-	svc := ec2.New(sess)
+	// Create a new AWS session
+	sess, err2 := session.NewSession(&aws.Config{})
+	if err2 != nil {
+		fmt.Printf("AWS login failed: %s\n", err2.Error())
+		return 1
+	}
 
 	// Process each group
 	for _, entry := range changes {
-		err := handleSecurityGroup(entry, svc, ip)
+		err := handleSecurityGroup(entry, sess, ip)
 		if err != nil {
 			fmt.Printf("error updating %s\n", err)
 		}

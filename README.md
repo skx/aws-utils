@@ -127,7 +127,21 @@ $ cat input.json
 ]
 ```
 
-It is possible to specify a single port, but the protocol (TCP) is hardcoded.
+Valid values for the JSON object are:
+
+* `SG`
+  * The ID of the security-group to update.
+* `Name`
+  * The name of the rule to add (i.e. description)
+  * This should be unique.
+* `Port`
+  * The port to permit.
+* `Role`
+  * Optionally you may specify an ARN of a role to assume.
+  * example : `arn:aws:iam::123456789010:role/devops-access`
+
+
+**NOTE**: As you can see it is possible to specify a single port, and only a single port.  Once you run the tool, with a suitable JSON input file, you'll get output like so:
 
 ```
 $ ./aws-utils remote-ip-change ./prod.json
