@@ -38,6 +38,7 @@ func main() {
 	subcommands.Register(&instancesCommand{})
 	subcommands.Register(&sgGrepCommand{})
 	subcommands.Register(&whitelistSelfCommand{})
+	subcommands.Register(&versionCommand{})
 	subcommands.Register(&whoamiCommand{})
 
 	//
