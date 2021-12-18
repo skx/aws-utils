@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 
 	"github.com/skx/subcommands"
 
@@ -48,11 +49,13 @@ Assume you have some security-groups which contain allow-lists of single IPs.
 This command allows you to quickly and easily update those to keep your own
 entry current.
 
-You should provide a configuration file containing:
+You should provide a configuration file containing a series of rules, where
+each rule contains:
 
-* The security-group IDs.
+* The security-group ID to which it applies.
 * The description to use for the rule.
-* The port to open in the security-group rule.
+  * This MUST be unique.
+* The port to open.
 * Optionally you may specify the ARN of an AWS role to assume.
 
 For example the following would be a good input file:
@@ -73,8 +76,9 @@ For example the following would be a good input file:
 ]
 
 When executed this command will then iterate over the rules contained in
-the specified security-group, and remove any existing rule with the same name,
-before adding a new rule with your current IP.
+the input-file.  For each rule it will examine the specified security-group,
+removing any entry with the same name as you've specified, before re-adding
+it with your current external IP.
 
 While you may only specify a single port in a rule you can add multiple
 rules to cover the case where you want to whitelist two ports - for example:
@@ -95,6 +99,10 @@ rules to cover the case where you want to whitelist two ports - for example:
 
 NOTE: This only examines Ingress Rules, there are no changes made to Egress
 rules.
+
+To ease portability environmental variables are exported so you may write:
+
+    "Name": "[aws-utils] - SSH - ${USER}",
 `
 
 }
@@ -272,7 +280,7 @@ func (i *whitelistSelfCommand) Execute(args []string) int {
 		return 1
 	}
 
-	// Get our remote IP
+	// Get our remote IP.
 	ip, err := getIP()
 	if err != nil {
 		fmt.Printf("Error finding your public IP: %s\n", err)
@@ -289,6 +297,12 @@ func (i *whitelistSelfCommand) Execute(args []string) int {
 
 	// Process each group
 	for _, entry := range changes {
+
+		// Expand any variables in the name first
+
+		entry.Name = os.ExpandEnv(entry.Name)
+
+		// Now handle the additional/removal
 		err := handleSecurityGroup(entry, sess, ip)
 		if err != nil {
 			fmt.Printf("error updating %s\n", err)

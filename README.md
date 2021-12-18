@@ -172,12 +172,12 @@ As you can see each rule allows you to whitelist a single port, and only a singl
 [
     {
         "SG": "sg-12345",
-        "Name": "[aws-utils] steve home: HTTPS",
+        "Name": "[aws-utils] ${USER} home: HTTPS",
         "Port": 443
     },
     {
         "SG": "sg-12345",
-        "Name": "[aws-utils] steve home: SSH",
+        "Name": "[aws-utils] ${USER} home: SSH",
         "Port": 22
     }
 ]
