@@ -71,8 +71,8 @@ The following sub-commands are available:
 
 * [csv-instances](#csv-instances)
 * [instances](#instances)
-* [remote-ip-change](#remote-ip-change)
 * [sg-grep](#sg-grep)
+* [whitelist-self](#whitelist-self)
 * [whoami](#whoami)
 
 
@@ -111,51 +111,6 @@ i-01066633e12345567 - prod-fooapp-uk
 
 
 
-### `remote-ip-change`
-
-This sub-command allows you to quickly update Ingress rules, with your current external IP address.
-
-Imagine you have a number of security-groups which permit access to resources via a small list of permitted source IPs this command will let you update your own entry in that list easily.
-
-Sample input file:
-
-```
-$ cat input.json
-[
-  { "SG": "sg-12344", "Name": "[aws-utils] Steve's Home IP", "Port": 443 },
-  { "SG": "sg-12345", "Name": "[aws-utils] Steve's Home IP", "Port": 22 }
-]
-```
-
-Valid values for the JSON object are:
-
-* `SG`
-  * The ID of the security-group to update.
-* `Name`
-  * The name of the rule to add (i.e. description)
-  * This should be unique.
-* `Port`
-  * The port to permit.
-* `Role`
-  * Optionally you may specify an ARN of a role to assume.
-  * example : `arn:aws:iam::123456789010:role/devops-access`
-
-
-**NOTE**: As you can see it is possible to specify a single port, and only a single port.  Once you run the tool, with a suitable JSON input file, you'll get output like so:
-
-```
-$ ./aws-utils remote-ip-change ./prod.json
-Your remote IP is 191.145.83.183/32
-  SecurityGroupID: sg-12344
-  IP:              191.145.83.183/32
-  Port:            443
-  Description:     [aws-utils] Steve's Home IP
-  Found existing entry, and deleted it
-  Added entry with current details
-```
-
-
-
 ### `sg-grep`
 
 Show security-groups which match a particular regular expression.
@@ -177,6 +132,68 @@ sg-01234567890abcdef [eu-central-1] - launch-wizard-1 created 2021-11-19T09:39:1
 	      ToPort: 22
 	    }],
 
+```
+
+
+
+### `whitelist-self`
+
+This sub-command allows you to quickly update Ingress rules, with your current external IP address.
+
+Imagine you have a number of security-groups which permit access to resources via a small list of permitted source IPs this command will let you update your own entry in that list easily.
+
+Sample input file:
+
+```
+$ cat input.json
+[
+  { "SG": "sg-12344", "Name": "[aws-utils] Steve's Home IP", "Port": 443 },
+  { "SG": "sg-12345", "Name": "[aws-utils] Steve's Home IP", "Port": 22 }
+]
+```
+
+Valid values for the JSON object are:
+
+* `SG`
+  * The ID of the security-group to update.
+* `Name`
+  * The name of the rule to add (i.e. description)
+  * This **must** be unique, as the tool operates by finding any existing rule with that name, deleting it if present, then re-adding it with your external IP.
+* `Port`
+  * The port to permit.
+* `Role`
+  * Optionally you may specify an ARN of a role to assume.
+  * example : `arn:aws:iam::123456789010:role/devops-access`
+
+
+As you can see each rule allows you to whitelist a single port, and only a single port.  Of course if you wish you can repeat rules with different ports like so:
+
+```json
+[
+    {
+        "SG": "sg-12345",
+        "Name": "[aws-utils] steve home: HTTPS",
+        "Port": 443
+    },
+    {
+        "SG": "sg-12345",
+        "Name": "[aws-utils] steve home: SSH",
+        "Port": 22
+    }
+]
+```
+
+Once you run the tool, with a suitable JSON input file, you'll get output like so:
+
+```
+$ ./aws-utils whitelist-self ./prod.json
+Your remote IP is 191.145.83.183/32
+  SecurityGroupID: sg-12345
+  IP:              191.145.83.183/32
+  Port:            443
+  Description:     [aws-utils] steve home: HTTPS
+  Found existing entry, and deleted it.
+  Added entry with current details.
 ```
 
 

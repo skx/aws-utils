@@ -5,9 +5,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/skx/subcommands"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/skx/subcommands"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -31,24 +32,25 @@ type ToChange struct {
 }
 
 // Structure for our options and state.
-type remoteIPChangeCommand struct {
+type whitelistSelfCommand struct {
 
 	// We embed the NoFlags option, because we accept no command-line flags.
 	subcommands.NoFlags
 }
 
 // Info returns the name of this subcommand.
-func (i *remoteIPChangeCommand) Info() (string, string) {
-	return "remote-ip-change", `Update security-groups with your external IP.
+func (i *whitelistSelfCommand) Info() (string, string) {
+	return "whitelist-self", `Update security-groups with your external IP.
 
 Details:
 
 Assume you have some security-groups which contain allow-lists of single IPs.
-This command allows you to quickly and easily update those.
+This command allows you to quickly and easily update those to keep your own
+entry current.
 
 You should provide a configuration file containing:
 
-* The security-group IDs
+* The security-group IDs.
 * The description to use for the rule.
 * The port to open in the security-group rule.
 * Optionally you may specify the ARN of an AWS role to assume.
@@ -73,6 +75,23 @@ For example the following would be a good input file:
 When executed this command will then iterate over the rules contained in
 the specified security-group, and remove any existing rule with the same name,
 before adding a new rule with your current IP.
+
+While you may only specify a single port in a rule you can add multiple
+rules to cover the case where you want to whitelist two ports - for example:
+
+
+[
+    {
+        "SG": "sg-12345",
+        "Name": "[aws-utils] steve home - https",
+        "Port": 443
+    },
+    {
+        "SG": "sg-12345",
+        "Name": "[aws-utils] steve home - ssh",
+        "Port": 22
+    }
+]
 
 NOTE: This only examines Ingress Rules, there are no changes made to Egress
 rules.
@@ -121,30 +140,23 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) (
 		for _, ipp := range sg.IpPermissions {
 			for _, ipr := range ipp.IpRanges {
 
-				flag := false
+				found := false
 				ipranges := []*ec2.IpRange{}
-
-				// Look for a rule that is "ours"
-				if mmyip == *ipr.CidrIp {
-					flag = true
-					ipranges = []*ec2.IpRange{{
-						CidrIp: aws.String(mmyip),
-					}}
-				}
 
 				// Look for the description which is ours
 				if mdesc == *ipr.Description {
-					flag = true
+					found = true
 					ipranges = []*ec2.IpRange{{
 						CidrIp:      ipr.CidrIp,
 						Description: aws.String(mdesc),
 					}}
 				}
-				// Not found the IP/description?
-				if !flag {
+
+				// Not found an appropriate rule?  Try again
+				if !found {
 					continue
 				}
-				// Delete the rule
+				// Delete the rule we've found
 				_, err := svc.RevokeSecurityGroupIngress(&ec2.RevokeSecurityGroupIngressInput{
 					GroupId: aws.String(groupid),
 					IpPermissions: []*ec2.IpPermission{{
@@ -201,6 +213,7 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 		svc = ec2.New(sess, &aws.Config{Credentials: creds})
 	}
 
+	// No port specified?  Then default to HTTPS.
 	if entry.Port == 0 {
 		entry.Port = 443
 	}
@@ -213,28 +226,32 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 	if entry.Role != "" {
 		fmt.Printf("  Role:            %s\n", entry.Role)
 	}
+
+	// Remove any existing rule with this name/description
 	deleted, err := myIPDeleteCurrent(svc, entry.SG, ip, entry.Name, int64(entry.Port))
 	if err != nil {
 		return err
 	}
+
+	// If we did make a change show that.
 	if deleted {
-		fmt.Printf("  Found existing entry, and deleted it\n")
+		fmt.Printf("  Found existing entry named %s, and deleted it.\n", entry.Name)
 	}
 
 	err = myIPAdd(svc, entry.SG, ip, entry.Name, int64(entry.Port))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("  Added entry with current details\n")
+	fmt.Printf("  Added new entry named %s, with current ip.\n", entry.Name)
 	return nil
 }
 
 // Execute is invoked if the user chooses this sub-command.
-func (i *remoteIPChangeCommand) Execute(args []string) int {
+func (i *whitelistSelfCommand) Execute(args []string) int {
 
 	// Ensure we have a configuration file
 	if len(args) < 1 {
-		fmt.Printf("Usage: aws-utils remote-ip-change config.json\n")
+		fmt.Printf("Usage: aws-utils whitelist-self config.json\n")
 		return 1
 	}
 
@@ -249,7 +266,7 @@ func (i *remoteIPChangeCommand) Execute(args []string) int {
 	// the input JSON file.
 	var changes []ToChange
 
-	// Build up a list of rules
+	// Parse our JSON into a list of rules.
 	if err = json.Unmarshal(cnf, &changes); err != nil {
 		fmt.Printf("Error loading JSON: %s\n", err)
 		return 1
