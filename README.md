@@ -28,6 +28,41 @@ source <(aws-utils bash-completion)
 
 
 
+## Help
+
+There is integrated help for each sub-command, for example running with no arguments will show you available commands:
+
+```sh
+$ aws-utils
+Please specify a valid subcommand, choices are:
+
+	bash-completion Generate and output a bash completion-script.
+	commands        Show all available sub-commands.
+	csv-instances   Export a summary of running instances.
+	help            Show usage information.
+	instances       Export a summary of running instances.
+	sg-grep         Security-Group Grep
+	whitelist-self  Update security-groups with your external IP.
+	whoami          Show the current AWS user or role name.
+```
+
+Reading the help text, recommended, is down via the `help` sub-command:
+
+```
+$ aws-utils help whitelist-self
+
+Synopsis:
+	Update security-groups with your external IP.
+
+Details:
+
+Assume you have some security-groups which contain allow-lists of single IPs.
+This command allows you to quickly and easily update those to keep your own
+entry current.
+
+...
+```
+
 
 ## Common Features
 
@@ -44,7 +79,7 @@ This is documented in the Golang SDK page:
 
 * https://docs.aws.amazon.com/sdk-for-go/api/aws/session/
 
-Many of the utilities also allow you to operate the same functionality upon an arbitrary number of AWS roles.  In that case you'd specify the path to a file containing roles to assume, via the `-roles` argument.
+Many of the utilities also allow you to operate upon an arbitrary number of AWS roles.  In that case you'd specify the path to a file containing roles to assume, via the `-roles` argument.
 
 For example:
 
@@ -89,6 +124,12 @@ Export a simple CSV-based list of running instances:
 * AMI ID
 * Age of AMI in days
 
+Usage:
+
+```sh
+$ aws-utils csv-instances [-roles=/path/to/roles]
+```
+
 
 
 ### `instances`
@@ -107,6 +148,12 @@ i-01066633e12345567 - prod-fooapp-uk
 	State: running
 	Volumes:
 		/dev/sda1	vol-01234567890abcdef	100Gb	gp2	Encrypted:true	IOPs:300
+```
+
+Usage:
+
+```sh
+$ aws-utils instances [-roles=/path/to/roles]
 ```
 
 
@@ -132,6 +179,12 @@ sg-01234567890abcdef [eu-central-1] - launch-wizard-1 created 2021-11-19T09:39:1
 	      ToPort: 22
 	    }],
 
+```
+
+Usage:
+
+```sh
+$ aws-utils sg-grep search-term
 ```
 
 
@@ -196,6 +249,11 @@ Your remote IP is 191.145.83.183/32
   Added entry with current details.
 ```
 
+Usage:
+
+```sh
+$ aws-utils whitelist-self /path/to/rules.json
+```
 
 
 ### `whoami`
