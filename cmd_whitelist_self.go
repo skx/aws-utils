@@ -257,6 +257,12 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 	if entry.Port == 0 {
 		entry.Port = 443
 	}
+	if entry.Name == "" {
+		colorReset := "\033[0m"
+		colorRed := "\033[31m"
+		fmt.Printf("%s  IGNORED rule with no Name field set.%s\n", colorRed, colorReset)
+		return nil
+	}
 
 	fmt.Printf("\n")
 	fmt.Printf("  SecurityGroupID: %s\n", entry.SG)
