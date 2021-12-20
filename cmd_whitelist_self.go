@@ -131,7 +131,12 @@ func getIP() (string, error) {
 
 }
 
-func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) (bool, error) {
+// myIPDeleteCurrent removes the single rule within the specified
+// security-group which has the description specified.
+//
+// If the description matches multiple rules then we abort, as we're
+// only expecting one.
+func myIPDeleteCurrent(svc *ec2.EC2, groupid, mdesc string, port int64) (bool, error) {
 
 	// Get the contents of the group.
 	current, err := svc.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
@@ -141,49 +146,69 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) (
 		return false, err
 	}
 
+	// Ensure that the name is non-unique before we do anything
+	// destructive - count the number of rules that have the
+	// specified text as the description.
+	count := 0
+	for _, sg := range current.SecurityGroups {
+		for _, ipp := range sg.IpPermissions {
+			for _, ipr := range ipp.IpRanges {
+				if mdesc == *ipr.Description {
+					count++
+				}
+			}
+		}
+	}
+
+	// No match means we have nothing to remove, so we terminate early.
+	if count == 0 {
+		return false, nil
+	}
+
+	// If we have more than one we're going to abort.
+	if count > 1 {
+		return false, fmt.Errorf("there are %d rules which have the description '%s' - aborting the deletion", count, mdesc)
+	}
+
 	// For each security-group
 	for _, sg := range current.SecurityGroups {
 
 		// For each rule
 		for _, ipp := range sg.IpPermissions {
-			for _, ipr := range ipp.IpRanges {
 
-				found := false
-				ipranges := []*ec2.IpRange{}
+			// for each CIDR range
+			for _, ipr := range ipp.IpRanges {
 
 				// Look for the description which is ours
 				if mdesc == *ipr.Description {
-					found = true
-					ipranges = []*ec2.IpRange{{
+					ipranges := []*ec2.IpRange{{
 						CidrIp:      ipr.CidrIp,
 						Description: aws.String(mdesc),
 					}}
-				}
 
-				// Not found an appropriate rule?  Try again
-				if !found {
-					continue
+					// Delete the rule we've found
+					_, err := svc.RevokeSecurityGroupIngress(&ec2.RevokeSecurityGroupIngressInput{
+						GroupId: aws.String(groupid),
+						IpPermissions: []*ec2.IpPermission{{
+							IpProtocol: aws.String("tcp"),
+							FromPort:   aws.Int64(port),
+							ToPort:     aws.Int64(port),
+							IpRanges:   ipranges,
+						}},
+					})
+					if err != nil {
+						return false, err
+					}
+					return true, nil
 				}
-				// Delete the rule we've found
-				_, err := svc.RevokeSecurityGroupIngress(&ec2.RevokeSecurityGroupIngressInput{
-					GroupId: aws.String(groupid),
-					IpPermissions: []*ec2.IpPermission{{
-						IpProtocol: aws.String("tcp"),
-						FromPort:   aws.Int64(port),
-						ToPort:     aws.Int64(port),
-						IpRanges:   ipranges,
-					}},
-				})
-				if err != nil {
-					return false, err
-				}
-				return true, nil
 			}
 		}
 	}
 	return false, nil
 }
 
+// myIPAdd adds a new CIDR range to the given security-group, with the
+// specified port.
 func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) error {
 
 	// Add the entry to the group
@@ -200,10 +225,8 @@ func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) error {
 			}},
 		}},
 	})
-	if err != nil {
-		return err
-	}
-	return nil
+
+	return err
 }
 
 // Handle a change here
@@ -236,7 +259,7 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 	}
 
 	// Remove any existing rule with this name/description
-	deleted, err := myIPDeleteCurrent(svc, entry.SG, ip, entry.Name, int64(entry.Port))
+	deleted, err := myIPDeleteCurrent(svc, entry.SG, entry.Name, int64(entry.Port))
 	if err != nil {
 		return err
 	}
@@ -299,13 +322,13 @@ func (i *whitelistSelfCommand) Execute(args []string) int {
 	for _, entry := range changes {
 
 		// Expand any variables in the name first
-
 		entry.Name = os.ExpandEnv(entry.Name)
 
 		// Now handle the additional/removal
 		err := handleSecurityGroup(entry, sess, ip)
 		if err != nil {
 			fmt.Printf("error updating %s\n", err)
+			return 1
 		}
 	}
 	return 0
