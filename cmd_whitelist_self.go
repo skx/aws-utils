@@ -54,9 +54,10 @@ each rule contains:
 
 * The security-group ID to which it applies.
 * The description to use for the rule.
-  * This MUST be unique.
+  * This MUST be unique within the security-group.
+  * Duplicates will be detected and will stop processing.
 * The port to open.
-* Optionally you may specify the ARN of an AWS role to assume.
+* Optionally you may specify the ARN of an AWS role to assume before starting.
 
 For example the following would be a good input file:
 
@@ -82,7 +83,6 @@ it with your current external IP.
 
 While you may only specify a single port in a rule you can add multiple
 rules to cover the case where you want to whitelist two ports - for example:
-
 
 [
     {
@@ -113,22 +113,30 @@ func getIP() (string, error) {
 	type IP struct {
 		Query string
 	}
+
+	// Make a HTTP-request
 	req, err := http.Get("http://ip-api.com/json/")
 	if err != nil {
 		return "", err
 	}
 	defer req.Body.Close()
 
+	// Read the body
 	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return "", err
 	}
 
+	// Decode the result
 	var ip IP
-	json.Unmarshal(body, &ip)
+	err = json.Unmarshal(body, &ip)
+	if err != nil {
+		return "", err
+	}
 
+	// Add a "/32" to the IP as that is what we'll need to use
+	// when we're looking at the security-groups.
 	return ip.Query + "/32", nil
-
 }
 
 // myIPDeleteCurrent removes the single rule within the specified
@@ -136,7 +144,7 @@ func getIP() (string, error) {
 //
 // If the description matches multiple rules then we abort, as we're
 // only expecting one.
-func myIPDeleteCurrent(svc *ec2.EC2, groupid, mdesc string, port int64) (bool, error) {
+func myIPDeleteCurrent(svc *ec2.EC2, groupid, desc string, port int64) (bool, error) {
 
 	// Get the contents of the group.
 	current, err := svc.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
@@ -146,14 +154,14 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mdesc string, port int64) (bool, e
 		return false, err
 	}
 
-	// Ensure that the name is non-unique before we do anything
+	// Ensure that the description is unique before we do anything
 	// destructive - count the number of rules that have the
 	// specified text as the description.
 	count := 0
 	for _, sg := range current.SecurityGroups {
 		for _, ipp := range sg.IpPermissions {
 			for _, ipr := range ipp.IpRanges {
-				if mdesc == *ipr.Description {
+				if desc == *ipr.Description {
 					count++
 				}
 			}
@@ -167,7 +175,7 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mdesc string, port int64) (bool, e
 
 	// If we have more than one we're going to abort.
 	if count > 1 {
-		return false, fmt.Errorf("there are %d rules which have the description '%s' - aborting the deletion", count, mdesc)
+		return false, fmt.Errorf("there are %d rules which have the description '%s' - aborting the deletion", count, desc)
 	}
 
 	// For each security-group
@@ -180,10 +188,10 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mdesc string, port int64) (bool, e
 			for _, ipr := range ipp.IpRanges {
 
 				// Look for the description which is ours
-				if mdesc == *ipr.Description {
+				if desc == *ipr.Description {
 					ipranges := []*ec2.IpRange{{
 						CidrIp:      ipr.CidrIp,
-						Description: aws.String(mdesc),
+						Description: aws.String(desc),
 					}}
 
 					// Delete the rule we've found
@@ -209,7 +217,7 @@ func myIPDeleteCurrent(svc *ec2.EC2, groupid, mdesc string, port int64) (bool, e
 
 // myIPAdd adds a new CIDR range to the given security-group, with the
 // specified port.
-func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) error {
+func myIPAdd(svc *ec2.EC2, groupid, mmyip, desc string, port int64) error {
 
 	// Add the entry to the group
 	var err error
@@ -221,7 +229,7 @@ func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) error {
 			IpProtocol: aws.String("tcp"),
 			IpRanges: []*ec2.IpRange{{
 				CidrIp:      aws.String(mmyip),
-				Description: aws.String(mdesc),
+				Description: aws.String(desc),
 			}},
 		}},
 	})
@@ -232,6 +240,7 @@ func myIPAdd(svc *ec2.EC2, groupid, mmyip, mdesc string, port int64) error {
 // Handle a change here
 func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error {
 
+	// Get a handle to the service to use.
 	svc := ec2.New(sess)
 
 	// If we have a role then use it.
@@ -269,6 +278,7 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 		fmt.Printf("  Found existing entry named %s, and deleted it.\n", entry.Name)
 	}
 
+	// Now add the new entry.
 	err = myIPAdd(svc, entry.SG, ip, entry.Name, int64(entry.Port))
 	if err != nil {
 		return err
@@ -277,20 +287,13 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 	return nil
 }
 
-// Execute is invoked if the user chooses this sub-command.
-func (i *whitelistSelfCommand) Execute(args []string) int {
-
-	// Ensure we have a configuration file
-	if len(args) < 1 {
-		fmt.Printf("Usage: aws-utils whitelist-self config.json\n")
-		return 1
-	}
+// RunJSON reads and processes the given JSON file
+func (i *whitelistSelfCommand) RunJSON(file string, ip string) error {
 
 	// Read the file
-	cnf, err := ioutil.ReadFile(args[0])
+	cnf, err := ioutil.ReadFile(file)
 	if err != nil {
-		fmt.Printf("Failed to read %s - %s\n", args[0], err)
-		return 1
+		return fmt.Errorf("failed to read %s - %s", file, err)
 	}
 
 	// All the entries we know we're going to change, as read from
@@ -299,23 +302,13 @@ func (i *whitelistSelfCommand) Execute(args []string) int {
 
 	// Parse our JSON into a list of rules.
 	if err = json.Unmarshal(cnf, &changes); err != nil {
-		fmt.Printf("Error loading JSON: %s\n", err)
-		return 1
+		return fmt.Errorf("error loading JSON: %s", err)
 	}
-
-	// Get our remote IP.
-	ip, err := getIP()
-	if err != nil {
-		fmt.Printf("Error finding your public IP: %s\n", err)
-		return 1
-	}
-	fmt.Printf("Your remote IP is %s\n", ip)
 
 	// Create a new AWS session
 	sess, err := session.NewSession(&aws.Config{})
 	if err != nil {
-		fmt.Printf("AWS login failed: %s\n", err.Error())
-		return 1
+		return fmt.Errorf("aws login failed: %s", err.Error())
 	}
 
 	// Process each group
@@ -327,9 +320,41 @@ func (i *whitelistSelfCommand) Execute(args []string) int {
 		// Now handle the additional/removal
 		err := handleSecurityGroup(entry, sess, ip)
 		if err != nil {
-			fmt.Printf("error updating %s\n", err)
-			return 1
+			return fmt.Errorf("error updating %s", err)
 		}
 	}
+
+	return nil
+}
+
+// Execute is invoked if the user chooses this sub-command.
+func (i *whitelistSelfCommand) Execute(args []string) int {
+
+	// Ensure we have a configuration file
+	if len(args) < 1 {
+		fmt.Printf("Usage: aws-utils whitelist-self config1.json config2.json .. configN.json\n")
+		return 1
+	}
+
+	// Get our remote IP.
+	ip, err := getIP()
+	if err != nil {
+		fmt.Printf("Error finding your public IP: %s\n", err)
+		return 1
+	}
+	fmt.Printf("Your remote IP is %s\n", ip)
+
+	// For each filename on the command line
+	for _, file := range args {
+
+		// Process the file
+		err = i.RunJSON(file, ip)
+
+		// Errors?  Then show them, but continue if there are more files
+		if err != nil {
+			fmt.Printf("Error %s\n", err)
+		}
+	}
+
 	return 0
 }
