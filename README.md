@@ -41,7 +41,9 @@ Please specify a valid subcommand, choices are:
 	csv-instances   Export a summary of running instances.
 	help            Show usage information.
 	instances       Export a summary of running instances.
+	rotate-keys     Rotate your AWS access keys.
 	sg-grep         Security-Group Grep
+	version         Show the version of this binary.
 	whitelist-self  Update security-groups with your external IP.
 	whoami          Show the current AWS user or role name.
 ```
@@ -74,7 +76,7 @@ All of the commands accept the use of AWS credentials in the way you'd expect, b
   * For the cases when you're using an assumed role.
 * `AWS_SHARED_CREDENTIALS_FILE`
   * The path to a credentials file (`~/.aws/credentials` by default).
-  * Only used by the [rotate-keys](rotate-keys) sub-command.
+  * Only used by the [rotate-keys](#rotate-keys) sub-command.
 * `AWS_REGION`
   * The region to use.
 
