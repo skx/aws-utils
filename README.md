@@ -68,14 +68,17 @@ entry current.
 
 All of the commands accept the use of AWS credentials in the way you'd expect, be it from `~/.aws/credentials` or via the use of environmental-variables:
 
-* `AWS_SECRET_ACCESS_KEY`
 * `AWS_ACCESS_KEY_ID`
+* `AWS_SECRET_ACCESS_KEY`
 * `AWS_SESSION_TOKEN`
-  * For the cases when you're using assume-role.
+  * For the cases when you're using an assumed role.
+* `AWS_SHARED_CREDENTIALS_FILE`
+  * The path to a credentials file (`~/.aws/credentials` by default).
+  * Only used by the [rotate-keys](rotate-keys) sub-command.
 * `AWS_REGION`
   * The region to use.
 
-This is documented in the Golang SDK page:
+These values are documented in the Golang SDK page:
 
 * https://docs.aws.amazon.com/sdk-for-go/api/aws/session/
 
