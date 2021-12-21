@@ -27,8 +27,8 @@ func NewSession() (*session.Session, error) {
 
 		// Add a logging handler
 		sess.Handlers.Send.PushFront(func(r *request.Request) {
-			fmt.Printf("Request: %s/%s %s",
-				r.ClientInfo.ServiceName, r.Operation, r.Params)
+			fmt.Printf("Request: %v [%s] %v",
+				r.Operation, r.ClientInfo.ServiceName, r.Params)
 		})
 	}
 
