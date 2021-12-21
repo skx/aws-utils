@@ -106,6 +106,7 @@ The following sub-commands are available:
 
 * [csv-instances](#csv-instances)
 * [instances](#instances)
+* [rotate-keys](#rotate-keys)
 * [sg-grep](#sg-grep)
 * [whitelist-self](#whitelist-self)
 * [whoami](#whoami)
@@ -155,6 +156,23 @@ Usage:
 ```sh
 $ aws-utils instances [-roles=/path/to/roles]
 ```
+
+
+### `rotate-keys`
+
+This sub-command uses the AWS API to regenerate a new set of AWS access-keys,
+and updates your `~/.aws/credentials` file with the new values.
+
+**NOTE**:
+
+* You may only have two sets of AWS Access Keys at a time
+  * So if you have two already one must be removed.
+  * You will be prompted prior to the removal of one, or you can add `-force` to avoid that interactive prompt.
+* `~/.aws/credentials` is the default file to use as the template for updating
+  * If that file is missing your keys will be removed/created but they will then be lost.
+  * This is because the output is achieved by reading the existing file and replacing existing keys, rather than blindly overwriting.
+  * We want to do this to avoid data-loss on things like your profile(s) and other configuration values.
+* **Take a backup** before running this tool for the first time.
 
 
 
