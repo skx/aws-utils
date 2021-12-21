@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/skx/aws-utils/utils"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 )
@@ -148,7 +150,7 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 
 	// Start an AWS session
 	var sess *session.Session
-	sess, err = session.NewSession()
+	sess, err = utils.NewSession()
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 	}

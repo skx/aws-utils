@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/skx/aws-utils/utils"
 	"github.com/skx/subcommands"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -310,7 +311,7 @@ func (i *whitelistSelfCommand) RunJSON(file string, ip string) error {
 	}
 
 	// Create a new AWS session
-	sess, err := session.NewSession(&aws.Config{})
+	sess, err := utils.NewSession()
 	if err != nil {
 		return fmt.Errorf("aws login failed: %s", err.Error())
 	}

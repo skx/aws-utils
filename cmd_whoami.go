@@ -9,12 +9,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/skx/aws-utils/utils"
 	"github.com/skx/subcommands"
 
 	"github.com/pkg/errors"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go/service/sts"
@@ -93,7 +93,7 @@ func getAccountAlias(svc iamiface.IAMAPI) (alias string) {
 func (i *whoamiCommand) Execute(args []string) int {
 
 	// Start a session
-	sess, err := session.NewSession()
+	sess, err := utils.NewSession()
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 	}
