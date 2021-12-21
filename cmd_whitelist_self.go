@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/skx/aws-utils/utils"
 	"github.com/skx/subcommands"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -258,8 +259,6 @@ func handleSecurityGroup(entry ToChange, sess *session.Session, ip string) error
 		entry.Port = 443
 	}
 	if entry.Name == "" {
-		colorReset := "\033[0m"
-		colorRed := "\033[31m"
 		fmt.Printf("%s  IGNORED rule with no Name field set.%s\n", colorRed, colorReset)
 		return nil
 	}
@@ -312,7 +311,7 @@ func (i *whitelistSelfCommand) RunJSON(file string, ip string) error {
 	}
 
 	// Create a new AWS session
-	sess, err := session.NewSession(&aws.Config{})
+	sess, err := utils.NewSession()
 	if err != nil {
 		return fmt.Errorf("aws login failed: %s", err.Error())
 	}

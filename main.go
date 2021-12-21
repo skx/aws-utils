@@ -36,6 +36,7 @@ func main() {
 	//
 	subcommands.Register(&csvInstancesCommand{})
 	subcommands.Register(&instancesCommand{})
+	subcommands.Register(&rotateKeysCommand{})
 	subcommands.Register(&sgGrepCommand{})
 	subcommands.Register(&whitelistSelfCommand{})
 	subcommands.Register(&versionCommand{})

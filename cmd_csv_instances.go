@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/skx/aws-utils/utils"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/sts"
 )
@@ -183,7 +184,7 @@ func (c *csvInstancesCommand) Execute(args []string) int {
 	//
 	// Get the connection, using default creds
 	//
-	sess, err2 := session.NewSession(&aws.Config{})
+	sess, err2 := utils.NewSession()
 	if err2 != nil {
 		fmt.Printf("AWS login failed: %s\n", err2.Error())
 		return 1

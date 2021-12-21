@@ -10,11 +10,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/skx/aws-utils/utils"
 	"github.com/skx/subcommands"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
@@ -66,7 +65,7 @@ func search(term string) {
 		os.Exit(1)
 	}
 
-	sess, err := session.NewSession(&aws.Config{})
+	sess, err := utils.NewSession()
 	if err != nil {
 		fmt.Printf("Error creating session %s\n", err)
 		os.Exit(1)
