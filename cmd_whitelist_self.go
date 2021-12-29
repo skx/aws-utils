@@ -23,13 +23,15 @@ type ToChange struct {
 	// SG contains the security-group ID which should be updated.
 	SG string
 
-	// Pattern contains the pattern to identify elements to update
+	// Name contains the description of the rule that we'll update.
+	// Updating here means "removing with old IP" and "adding with new IP".
 	Name string
 
-	// Role contains the AWS role to assume before making the change
+	// Role contains the AWS role to assume before proceeding to look
+	// at the security-group specified.
 	Role string
 
-	// The port which will be whitelisted
+	// The port which will be whitelisted (TCP-only).
 	Port int
 }
 
