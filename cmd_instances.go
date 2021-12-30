@@ -5,17 +5,14 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/sts"
+
 	"github.com/skx/aws-utils/utils"
 )
 
@@ -26,7 +23,10 @@ type instancesCommand struct {
 	rolesPath string
 }
 
-// Volume holds detailed regarding an instances volumes
+// Volume holds detailed regarding an instances volumes.
+//
+// This structure is used to populate the text/template we use for output
+// generation.
 type Volume struct {
 	// Device is the name of the device
 	Device string
@@ -48,7 +48,14 @@ type Volume struct {
 }
 
 // InstanceOutput is the structure used to populate our templated output
+//
+// This structure is used to populate the text/template we use for output
+// generation.
 type InstanceOutput struct {
+
+	// AWSAccount is the account number we're running under
+	AWSAccount string
+
 	// InstanceID holds the AWS instance ID
 	InstanceID string
 
@@ -78,12 +85,12 @@ type InstanceOutput struct {
 }
 
 // Arguments adds per-command args to the object.
-func (c *instancesCommand) Arguments(f *flag.FlagSet) {
-	f.StringVar(&c.rolesPath, "roles", "", "Path to a list of roles to process, one by one")
+func (i *instancesCommand) Arguments(f *flag.FlagSet) {
+	f.StringVar(&i.rolesPath, "roles", "", "Path to a list of roles to process, one by one")
 }
 
 // Info returns the name of this subcommand.
-func (c *instancesCommand) Info() (string, string) {
+func (i *instancesCommand) Info() (string, string) {
 	return "instances", `Export a summary of running instances.
 
 Details:
@@ -104,9 +111,12 @@ aviatrix-sre-prd-rss-aviatrix-gateway - i-047673c09867d3c3a
 
 }
 
-// Dump looks up the appropriate details and outputs them to the console, via the use
-// of the provided template.
-func Dump(svc *ec2.EC2, acct string, tmpl *template.Template) error {
+// DumpInstances looks up the appropriate details and outputs them to the
+// console, via the use of a provided template.
+func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interface{}) error {
+
+	// Cast our template back into the correct object-type
+	tmpl := void.(*template.Template)
 
 	// Get the instances which are running/pending
 	params := &ec2.DescribeInstancesInput{
@@ -138,6 +148,7 @@ func Dump(svc *ec2.EC2, acct string, tmpl *template.Template) error {
 			//
 
 			// Values which are always present.
+			out.AWSAccount = acct
 			out.InstanceID = *instance.InstanceId
 			out.InstanceName = *instance.InstanceId
 			out.InstanceState = *instance.State.Name
@@ -256,7 +267,7 @@ func readBlockDevicesFromInstance(instance *ec2.Instance, conn *ec2.EC2) (map[st
 }
 
 // Execute is invoked if the user specifies this subcommand.
-func (c *instancesCommand) Execute(args []string) int {
+func (i *instancesCommand) Execute(args []string) int {
 
 	//
 	// Create the template we'll use for output
@@ -264,6 +275,7 @@ func (c *instancesCommand) Execute(args []string) int {
 	text := `
 {{.InstanceName}} {{.InstanceID}}
   AMI         : {{.InstanceAMI}}
+  AWS Account : {{.AWSAccount}}
 {{- if .SSHKeyName  }}
   KeyName     : {{.SSHKeyName}}
 {{- end}}
@@ -283,91 +295,24 @@ func (c *instancesCommand) Execute(args []string) int {
 	//
 	// Get the connection, using default credentials
 	//
-	sess, err2 := utils.NewSession()
-	if err2 != nil {
-		fmt.Printf("%s\n", err2.Error())
-	}
-
-	//
-	// Create a new session to find our account
-	//
-	stsSvc := sts.New(sess)
-	out, err3 := stsSvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err3 != nil {
-		fmt.Printf("Failed to get identity: %s", err3.Error())
-		return 1
-	}
-
-	acct := *out.Account
-
-	//
-	// If we have no role-list then just dump our current account
-	//
-	if c.rolesPath == "" {
-
-		svc := ec2.New(sess)
-
-		err := Dump(svc, acct, tmpl)
-		if err != nil {
-			fmt.Printf("error syncing account %s\n", err.Error())
-			return 1
-		}
-
-		return 0
-	}
-
-	//
-	// OK we have a list of roles, handle them one by one
-	//
-	file, err := os.Open(c.rolesPath)
+	session, err := utils.NewSession()
 	if err != nil {
-		fmt.Printf("Error opening role-file: %s %s\n", c.rolesPath, err.Error())
+		fmt.Printf("%s\n", err.Error())
 		return 1
 	}
-	defer file.Close()
 
 	//
-	// Process the role-file line by line
+	// Now invoke our callback - this will call the function
+	// "DumpInstances" once if we're not running with a role-file,
+	// otherwise once for each role.
 	//
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
+	errs := utils.HandleRoles(session, i.rolesPath, i.DumpInstances, tmpl)
 
-		// Get the line
-		role := scanner.Text()
-
-		// Skip comments
-		if strings.HasPrefix(role, "#") {
-			continue
+	if len(errs) > 0 {
+		fmt.Printf("errors running instance dump\n")
+		for _, err := range errs {
+			fmt.Printf("%s\n", err)
 		}
-
-		// process
-		creds := stscreds.NewCredentials(sess, role)
-
-		// Create service client value configured for credentials
-		// from assumed role.
-		svc := ec2.New(sess, &aws.Config{Credentials: creds})
-
-		// We'll get the account from the string which looks like this:
-		//
-		// arn:aws:iam::1234:role/blah-abc
-		//
-		// We split by ":" and get the fourth field.
-		//
-		data := strings.Split(role, ":")
-		acct := data[4]
-
-		// Process the running instances
-		err = Dump(svc, acct, tmpl)
-		if err != nil {
-			fmt.Printf("Error for role %s %s\n", role, err.Error())
-		}
-	}
-
-	//
-	// Error processing the end of the file?
-	//
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error processing role-file: %s %s\n", c.rolesPath, err.Error())
 		return 1
 	}
 
