@@ -41,6 +41,7 @@ Please specify a valid subcommand, choices are:
 	csv-instances   Export a summary of running instances.
 	help            Show usage information.
 	instances       Export a summary of running instances.
+	orphaned-zones  Show orphaned Route53 zones.
 	rotate-keys     Rotate your AWS access keys.
 	sg-grep         Security-Group Grep
 	version         Show the version of this binary.
@@ -111,6 +112,7 @@ The following sub-commands are available:
 
 * [csv-instances](#csv-instances)
 * [instances](#instances)
+* [orphaned-zones](#orphaned-zones)
 * [rotate-keys](#rotate-keys)
 * [sg-grep](#sg-grep)
 * [whitelist-self](#whitelist-self)
@@ -161,6 +163,25 @@ Usage:
 ```sh
 $ aws-utils instances [-roles=/path/to/roles]
 ```
+
+
+### `orphaned-zones`
+
+This sub-command examines all domains which have DNS hosted in Route53,
+and reports those which have nameservers configured which are __not__
+belonging to AWS.
+
+This is designed to identify domains which have expired, or had their
+DNS-hosting moved to an external system (such as cloudflare, or similar).
+
+Usage:
+
+```sh
+$ aws-utils orphaned-zones
+VALID  - dhcp.io.
+ORPHAN - example.com.
+```
+
 
 
 ### `rotate-keys`

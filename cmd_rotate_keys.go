@@ -153,6 +153,7 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 	sess, err = utils.NewSession()
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
+		return 1
 	}
 
 	// Create the handle and list keys - so we can see if we need to
