@@ -70,10 +70,10 @@ entry current.
 
 All of the commands accept the use of AWS credentials in the way you'd expect, be it from `~/.aws/credentials` or via the use of environmental-variables:
 
-* `AWS_ACCESS_KEY_ID`
-* `AWS_SECRET_ACCESS_KEY`
-* `AWS_SESSION_TOKEN`
-  * For the cases when you're using an assumed role.
+* For authentication
+   * `AWS_ACCESS_KEY_ID`
+   * `AWS_SECRET_ACCESS_KEY`
+   * `AWS_SESSION_TOKEN` (optionally)
 * `AWS_SHARED_CREDENTIALS_FILE`
   * The path to a credentials file (`~/.aws/credentials` by default).
   * Only used by the [rotate-keys](#rotate-keys) sub-command.
@@ -207,7 +207,7 @@ sg-01234567890abcdef [eu-central-1] - launch-wizard-1 created 2021-11-19T09:39:1
 Usage:
 
 ```sh
-$ aws-utils sg-grep search-term
+$ aws-utils sg-grep [-roles=/path/to/roles] search-term1 search-term2 ..
 ```
 
 
@@ -234,7 +234,7 @@ Valid values for the JSON object are:
   * The ID of the security-group to update.
 * `Name`
   * The name of the rule to add (i.e. description)
-  * This **must** be unique, as the tool operates by finding any existing rule with that name, deleting it if present, then re-adding it with your external IP.
+  * This **must** be unique within the security-group.
 * `Port`
   * The port to permit.
 * `Role`

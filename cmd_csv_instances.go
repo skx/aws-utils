@@ -5,19 +5,14 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/skx/aws-utils/utils"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/sts"
 )
 
 // Cache of creation-time/date
@@ -60,7 +55,7 @@ Other fields might be added in the future.
 // Get the creation-date of the given AMI.
 //
 // Values are cached.
-func amiCreation(svc *ec2.EC2, id string) (string, error) {
+func (c *csvInstancesCommand) amiCreation(svc *ec2.EC2, id string) (string, error) {
 
 	// Lookup in the cache to see if we've already found the creation
 	// date for this AMI
@@ -96,7 +91,7 @@ func amiCreation(svc *ec2.EC2, id string) (string, error) {
 }
 
 // Sync from remote to local
-func Sync(svc *ec2.EC2, acct string) error {
+func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{}) error {
 
 	// Get the instances which are running/pending
 	params := &ec2.DescribeInstancesInput{
@@ -142,7 +137,7 @@ func Sync(svc *ec2.EC2, acct string) error {
 			//
 			// Get the AMI creation-date
 			//
-			create, err := amiCreation(svc, ami)
+			create, err := c.amiCreation(svc, ami)
 			if err != nil {
 				return fmt.Errorf("failed to get creation date of %s: %s", ami, err.Error())
 			}
@@ -182,94 +177,25 @@ func (c *csvInstancesCommand) Execute(args []string) int {
 	cache = make(map[string]string)
 
 	//
-	// Get the connection, using default creds
+	// Get the connection, using default credentials
 	//
-	sess, err2 := utils.NewSession()
-	if err2 != nil {
-		fmt.Printf("AWS login failed: %s\n", err2.Error())
-		return 1
-	}
-
-	//
-	// Create a new session to find our account
-	//
-	stsSvc := sts.New(sess)
-	out, err3 := stsSvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err3 != nil {
-		fmt.Printf("Failed to get identity: %s", err3.Error())
-		return 1
-	}
-
-	acct := *out.Account
-
-	//
-	// If we have no role-list then just dump our current account
-	//
-	if c.rolesPath == "" {
-
-		svc := ec2.New(sess)
-
-		err := Sync(svc, acct)
-		if err != nil {
-			fmt.Printf("error syncing account %s\n", err.Error())
-			return 1
-		}
-
-		return 0
-	}
-
-	//
-	// OK we have a list of roles, handle them one by one
-	//
-	file, err := os.Open(c.rolesPath)
+	session, err := utils.NewSession()
 	if err != nil {
-		fmt.Printf("Error opening role-file: %s %s\n", c.rolesPath, err.Error())
+		fmt.Printf("%s\n", err.Error())
 		return 1
 	}
-	defer file.Close()
 
 	//
-	// Process the role-file line by line
+	// Now invoke our callback - this will call the function
+	// "DumpCSV" once if we're not running with a role-file,
+	// otherwise once for each role.
 	//
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-
-		// Get the line
-		role := scanner.Text()
-
-		// Skip comments
-		if strings.HasPrefix(role, "#") {
-			continue
+	errs := utils.HandleRoles(session, c.rolesPath, c.DumpCSV, nil)
+	if len(errs) > 0 {
+		fmt.Printf("errors running CSV-Dump\n")
+		for _, err := range errs {
+			fmt.Printf("%s\n", err)
 		}
-
-		// process
-		creds := stscreds.NewCredentials(sess, role)
-
-		// Create service client value configured for credentials
-		// from assumed role.
-		svc := ec2.New(sess, &aws.Config{Credentials: creds})
-
-		// We'll get the account from the string which looks like this:
-		//
-		// arn:aws:iam::1234:role/blah-abc
-		//
-		// We split by ":" and get the fourth field.
-		//
-		data := strings.Split(role, ":")
-		acct := data[4]
-
-		// Process the running instances
-		err = Sync(svc, acct)
-		if err != nil {
-			fmt.Printf("Error for role %s %s\n", role, err.Error())
-		}
-	}
-
-	//
-	// Error processing the end of the file?
-	//
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error processing role-file: %s %s\n", c.rolesPath, err.Error())
 		return 1
 	}
 

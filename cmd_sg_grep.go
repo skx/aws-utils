@@ -5,17 +5,12 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/skx/aws-utils/utils"
 )
 
@@ -45,8 +40,6 @@ This command allows you to run grep against security-groups.
 // Execute is invoked if the user specifies this sub-command.
 func (sg *sgGrepCommand) Execute(args []string) int {
 
-	failed := false
-
 	if len(args) < 1 {
 		fmt.Printf("Usage: aws-utils sg-grep term1 ..\n")
 		return 1
@@ -55,109 +48,59 @@ func (sg *sgGrepCommand) Execute(args []string) int {
 	//
 	// Get the connection, using default credentials
 	//
-	sess, err2 := utils.NewSession()
-	if err2 != nil {
-		fmt.Printf("%s\n", err2.Error())
-		return 1
-	}
-
-	//
-	// Create a new session to find our account
-	//
-	stsSvc := sts.New(sess)
-	out, err3 := stsSvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err3 != nil {
-		fmt.Printf("Failed to get identity: %s", err3.Error())
-		return 1
-	}
-
-	//
-	// This is our account ID
-	//
-	acct := *out.Account
-
-	//
-	// If we have no role-list then just dump our current account
-	//
-	if sg.rolesPath == "" {
-
-		svc := ec2.New(sess)
-
-		// For each term
-		for _, term := range args {
-
-			// Run the search
-			err := sg.search(svc, acct, term)
-			if err != nil {
-				fmt.Printf("%sError: %s%s\n", colorRed, err, colorReset)
-				return 1
-			}
-		}
-		return 0
-	}
-
-	//
-	// OK we have a list of roles, handle them one by one
-	//
-	file, err := os.Open(sg.rolesPath)
+	session, err := utils.NewSession()
 	if err != nil {
-		fmt.Printf("Error opening role-file: %s %s\n", sg.rolesPath, err.Error())
+		fmt.Printf("%s\n", err.Error())
 		return 1
 	}
-	defer file.Close()
 
 	//
-	// Process the role-file line by line
+	// Now invoke our callback - this will call the function
+	// "Search" once if we're not running with a role-file,
+	// otherwise once for each role.
 	//
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
+	errs := utils.HandleRoles(session, sg.rolesPath, sg.Search, args)
 
-		// Get the line
-		role := scanner.Text()
+	if len(errs) > 0 {
+		fmt.Printf("errors running search\n")
 
-		// Skip comments
-		if strings.HasPrefix(role, "#") {
-			continue
+		for _, err := range errs {
+			fmt.Printf("%s\n", err)
 		}
-
-		// process
-		creds := stscreds.NewCredentials(sess, role)
-
-		// Create service client value configured for credentials
-		// from assumed role.
-		svc := ec2.New(sess, &aws.Config{Credentials: creds})
-
-		// for each term
-		for _, term := range args {
-
-			// Run the search
-			err := sg.search(svc, role, term)
-			if err != nil {
-				fmt.Printf("%sError: %s%s\n", colorRed, err, colorReset)
-				failed = true
-			}
-		}
-	}
-
-	//
-	// Error processing the end of the file?
-	//
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error processing role-file: %s %s\n", sg.rolesPath, err.Error())
 		return 1
 	}
 
-	if failed {
-		return 1
-	}
 	return 0
 }
 
+// Search is our callback method, which is invoked once for our main
+// account - if no roles-file is specified - or once for each assumed
+// role within that file.
 //
-// Perform a search of the security-groups in the given region for
-// the specified text.
-//
-func (sg *sgGrepCommand) search(svc *ec2.EC2, account string, term string) error {
+// We return our search-terms to their array-form, and perform a single
+// search for each one.
+func (sg *sgGrepCommand) Search(svc *ec2.EC2, account string, void interface{}) error {
+
+	// Get our search-terms back as an array
+	terms := void.([]string)
+
+	// For each one ..
+	for _, term := range terms {
+
+		// Run the search
+		err := sg.searchTerm(svc, account, term)
+
+		// return any error
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// searchTerm runs the search within one AWS account, and reports upon
+// any matches
+func (sg *sgGrepCommand) searchTerm(svc *ec2.EC2, account string, term string) error {
 
 	// Compile the term into a regular expression
 	//
@@ -168,7 +111,7 @@ func (sg *sgGrepCommand) search(svc *ec2.EC2, account string, term string) error
 
 	}
 
-	// Retrieve the security group descriptions
+	// Retrieve the security groups
 	result, err := svc.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{})
 	if err != nil {
 		return fmt.Errorf("unable to get security-groups %s", err)
