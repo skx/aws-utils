@@ -173,10 +173,10 @@ func Dump(svc *ec2.EC2, acct string, tmpl *template.Template) error {
 					out.Volumes = append(out.Volumes, Volume{
 						Device:    fmt.Sprintf("%s", x["device_name"]),
 						ID:        fmt.Sprintf("%s", x["id"]),
-						Size:      fmt.Sprintf("%s", x["volume_size"]),
+						Size:      fmt.Sprintf("%d", x["volume_size"]),
 						Type:      fmt.Sprintf("%s", x["volume_type"]),
-						Encrypted: fmt.Sprintf("%s", x["encrypted"]),
-						IOPS:      fmt.Sprintf("%s", x["iops"])})
+						Encrypted: fmt.Sprintf("%t", x["encrypted"]),
+						IOPS:      fmt.Sprintf("%d", x["iops"])})
 				}
 			} else {
 				return (fmt.Errorf("failed to read devices %s", err))
@@ -262,19 +262,20 @@ func (c *instancesCommand) Execute(args []string) int {
 	// Create the template we'll use for output
 	//
 	text := `
-{{.InstanceName}} {{.InstanceId}}
-
+{{.InstanceName}} {{.InstanceID}}
   AMI         : {{.InstanceAMI}}
-{{if .SSHKeyName }}  KeyName     : {{.SSHKeyName}}{{end}}
-{{if .PrivateIPv4}}  Private IPv4: {{.PrivateIPv4}}{{end}}
-{{if .PublicIPv4 }}  Public  IPv4: {{.PublicIPv4}}{{end}}
-  State       : {{.InstanceState}}
-
+{{- if .SSHKeyName  }}
+  KeyName     : {{.SSHKeyName}}
+{{- end}}
+{{- if .PrivateIPv4 }}
+  Private IPv4: {{.PrivateIPv4}}
+{{- end}}
+{{- if .PublicIPv4  }}
+  Public  IPv4: {{.PublicIPv4}}
+{{- end}}
 {{if .Volumes}}
-  Volumes:
-{{range .Volumes}}
-     {{.Id}} mounted on {{.Device}}\tSize:{{.Size}}GiB\tType:{{.Type}}\tEncrypted:{{.Encrypted}}\tIOPS:{{.IOPS}}
-{{end}}
+  Volumes:{{range .Volumes}}
+     {{.ID}} mounted on {{.Device}} Size:{{.Size}}GiB Type:{{.Type}} Encrypted:{{.Encrypted}} IOPS:{{.IOPS}}{{end}}
 {{end}}
 `
 	tmpl := template.Must(template.New("output").Parse(text))
