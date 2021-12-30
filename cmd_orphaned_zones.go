@@ -43,7 +43,7 @@ func (i *orphanedZonesCommand) Execute(args []string) int {
 	sess, err := utils.NewSession()
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
-		return
+		return 1
 	}
 
 	// Get the service handle
