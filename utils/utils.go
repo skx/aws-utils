@@ -111,7 +111,7 @@ func HandleRoles(session *session.Session, roleFile string, callback AWSCallback
 
 		// Get the line, and trim leading/trailing spaces
 		role := scanner.Text()
-		role = strings.TrimSpace(input)
+		role = strings.TrimSpace(role)
 
 		// Skip comments
 		if strings.HasPrefix(role, "#") {
