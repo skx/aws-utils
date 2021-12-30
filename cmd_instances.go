@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -23,6 +24,57 @@ type instancesCommand struct {
 
 	// Path to a file containing roles
 	rolesPath string
+}
+
+// Volume holds detailed regarding an instances volumes
+type Volume struct {
+	// Device is the name of the device
+	Device string
+
+	// ID is the name of the ID
+	ID string
+
+	// Size is the size of the device.
+	Size string
+
+	// Type is the storage type.
+	Type string
+
+	// Encrypted contains the encryption value of the volume
+	Encrypted string
+
+	// IOPS holds the speed of the device.
+	IOPS string
+}
+
+// InstanceOutput is the structure used to populate our templated output
+type InstanceOutput struct {
+	// InstanceID holds the AWS instance ID
+	InstanceID string
+
+	// InstanceName holds the AWS instance name, if set
+	InstanceName string
+
+	// InstanceAMI holds the AMI name
+	InstanceAMI string
+
+	// InstanceState holds the instance state (stopped, running, etc)
+	InstanceState string
+
+	// InstanceType holds the instance type "t2.tiny", etc.
+	InstanceType string
+
+	// Keypair setup for access.
+	SSHKeyName string
+
+	// PublicIPv4 has the public IPv4 address
+	PublicIPv4 string
+
+	// PrivateIPv4 has the private IPv4 address
+	PrivateIPv4 string
+
+	// Volumes holds all known volumes
+	Volumes []Volume
 }
 
 // Arguments adds per-command args to the object.
@@ -48,13 +100,13 @@ aviatrix-sre-prd-rss-aviatrix-gateway - i-047673c09867d3c3a
         State: running
         Volumes:
         vol-05c23836682aceab8 attached as /dev/sda1     Size:16GiB      IOPS:100
-
 `
 
 }
 
-// Dump looks up the appropriate details and outputs them to the console.
-func Dump(svc *ec2.EC2, acct string) error {
+// Dump looks up the appropriate details and outputs them to the console, via the use
+// of the provided template.
+func Dump(svc *ec2.EC2, acct string, tmpl *template.Template) error {
 
 	// Get the instances which are running/pending
 	params := &ec2.DescribeInstancesInput{
@@ -74,77 +126,67 @@ func Dump(svc *ec2.EC2, acct string) error {
 
 	// For each instance show stuff
 	for _, reservation := range result.Reservations {
+
+		// The structure to output for this instance
+		var out InstanceOutput
+
 		for _, instance := range reservation.Instances {
 
-			// We have a running EC2 instnace.
+			// We have a running EC2 instance, we'll populate
+			// the InstanceOutput structure with details which we
+			// can then print using a simple template.
+			//
 
-			// Collect the data we want
-			id := *instance.InstanceId
-
-			// Find the name.
-			name := *instance.InstanceId
+			// Values which are always present.
+			out.InstanceID = *instance.InstanceId
+			out.InstanceName = *instance.InstanceId
+			out.InstanceState = *instance.State.Name
+			out.InstanceType = *instance.InstanceType
+			out.InstanceAMI = *instance.ImageId
 
 			// Look for the name, which is set via a Tag.
 			i := 0
 			for i < len(instance.Tags) {
 
 				if *instance.Tags[i].Key == "Name" {
-					name = *instance.Tags[i].Value
+					out.InstanceName = *instance.Tags[i].Value
 				}
 				i++
 			}
 
-			// AMI name
-			ami := *instance.ImageId
-
-			first := fmt.Sprintf("%s - %s", id, name)
-
-			row := ""
-			for len(row) < len(first) {
-				row += "-"
-			}
-
-			fmt.Printf("%s\n%s\n", first, row)
-
-			// details
-			fmt.Printf("\tAMI: %s\n", ami)
-			fmt.Printf("\tInstance type: %s\n", *instance.InstanceType)
-
+			// Optional values
 			if instance.KeyName != nil {
-				fmt.Printf("\tKey name: %s\n", *instance.KeyName)
+				out.SSHKeyName = *instance.KeyName
 			}
 			if instance.PublicIpAddress != nil {
-				fmt.Printf("\tPublic  IPv4: %s\n", *instance.PublicIpAddress)
+				out.PublicIPv4 = *instance.PublicIpAddress
 			}
 			if instance.PrivateIpAddress != nil {
-				fmt.Printf("\tPrivate IPv4: %s\n", *instance.PrivateIpAddress)
+				out.PrivateIPv4 = *instance.PrivateIpAddress
 			}
-			fmt.Printf("\tState: %s\n", *instance.State.Name)
 
-			out, err := readBlockDevicesFromInstance(instance, svc)
+			// Now the storage associated with the instance
+			vols, err := readBlockDevicesFromInstance(instance, svc)
 			if err == nil {
-				fmt.Printf("\tVolumes:\n")
+				for _, x := range vols["ebs"].([]map[string]interface{}) {
 
-				for _, x := range out["ebs"].([]map[string]interface{}) {
-					//					t := x.(map[string]interface{})
-					fmt.Printf("\t\t%s\t%s\t%dGb\t%s\tEncrypted:%t\tIOPs:%d\n",
-						x["device_name"],
-						x["id"],
-						x["volume_size"],
-						x["volume_type"],
-						x["encrypted"],
-						x["iops"],
-					)
+					out.Volumes = append(out.Volumes, Volume{
+						Device:    fmt.Sprintf("%s", x["device_name"]),
+						ID:        fmt.Sprintf("%s", x["id"]),
+						Size:      fmt.Sprintf("%d", x["volume_size"]),
+						Type:      fmt.Sprintf("%s", x["volume_type"]),
+						Encrypted: fmt.Sprintf("%t", x["encrypted"]),
+						IOPS:      fmt.Sprintf("%d", x["iops"])})
 				}
 			} else {
-				fmt.Printf("Volume error: %s\n", err)
+				return (fmt.Errorf("failed to read devices %s", err))
 			}
 
-			//	vol := *bd.Ebs.VolumeId
-			//	fmt.Printf("\t%s %s\n", dev, vol)
-			//			}
-			fmt.Printf("\n")
-
+			// Output the rendered template to the console
+			err = tmpl.Execute(os.Stdout, out)
+			if err != nil {
+				return fmt.Errorf("error rendering template %s", err)
+			}
 		}
 	}
 	return nil
@@ -217,7 +259,29 @@ func readBlockDevicesFromInstance(instance *ec2.Instance, conn *ec2.EC2) (map[st
 func (c *instancesCommand) Execute(args []string) int {
 
 	//
-	// Get the connection, using default creds
+	// Create the template we'll use for output
+	//
+	text := `
+{{.InstanceName}} {{.InstanceID}}
+  AMI         : {{.InstanceAMI}}
+{{- if .SSHKeyName  }}
+  KeyName     : {{.SSHKeyName}}
+{{- end}}
+{{- if .PrivateIPv4 }}
+  Private IPv4: {{.PrivateIPv4}}
+{{- end}}
+{{- if .PublicIPv4  }}
+  Public  IPv4: {{.PublicIPv4}}
+{{- end}}
+{{if .Volumes}}
+  Volumes:{{range .Volumes}}
+     {{.ID}} mounted on {{.Device}} Size:{{.Size}}GiB Type:{{.Type}} Encrypted:{{.Encrypted}} IOPS:{{.IOPS}}{{end}}
+{{end}}
+`
+	tmpl := template.Must(template.New("output").Parse(text))
+
+	//
+	// Get the connection, using default credentials
 	//
 	sess, err2 := utils.NewSession()
 	if err2 != nil {
@@ -243,7 +307,7 @@ func (c *instancesCommand) Execute(args []string) int {
 
 		svc := ec2.New(sess)
 
-		err := Dump(svc, acct)
+		err := Dump(svc, acct, tmpl)
 		if err != nil {
 			fmt.Printf("error syncing account %s\n", err.Error())
 			return 1
@@ -293,7 +357,7 @@ func (c *instancesCommand) Execute(args []string) int {
 		acct := data[4]
 
 		// Process the running instances
-		err = Sync(svc, acct)
+		err = Dump(svc, acct, tmpl)
 		if err != nil {
 			fmt.Printf("Error for role %s %s\n", role, err.Error())
 		}
