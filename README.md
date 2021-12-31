@@ -161,7 +161,7 @@ i-01066633e12345567 - prod-fooapp-uk
 Usage:
 
 ```sh
-$ aws-utils instances [-roles=/path/to/roles]
+$ aws-utils instances [-json] [-roles=/path/to/roles]
 ```
 
 
