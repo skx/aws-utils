@@ -56,46 +56,52 @@ func (i *orphanedZonesCommand) Execute(args []string) int {
 		return 1
 	}
 
-	// Collect orphans here so that we can display them neatly at the
-	// end of our output.
-	orphaned := []string{}
+	// Collect orphans, errors, and valid domains in these
+	// arrays so we can show them (sorted) at the end of our
+	// processing
+	valid := []string{}
+	error := []string{}
+	orphan := []string{}
 
 	// Process each domain
 	for _, entry := range r.HostedZones {
 
-		// Lookup the nameservers
+		// Lookup the nameservers, if there's an error skip
 		nameserver, err := net.LookupNS(*entry.Name)
 		if err != nil {
-			fmt.Printf("Failed to lookup NS record for %s: %s\n", *entry.Name, err)
+			error = append(error, fmt.Sprintf("%s - %s", *entry.Name, err))
+			continue
 		}
 
-		// Assume hosted in AWS, so valid and not orphaned
-		valid := true
-
-		// Look at the nameservers, if they don't contain "aws"
-		// then we've got an orphan
+		// Now we have the nameserver(s) look for ones that
+		// contain the string "aws".  This is a proxy for being
+		// hosted by route53 (still).
+		aws := true
 		for _, ns := range nameserver {
 			n := fmt.Sprintf("%s", ns)
 			if !strings.Contains(n, "aws") {
-				valid = false
+				aws = false
 			}
 		}
-
-		// If valid then show it.
-		if valid {
-			fmt.Printf("VALID  - %s\n", *entry.Name)
+		if aws {
+			valid = append(valid, *entry.Name)
 		} else {
-
-			// Save it in our orphan-list
-			orphaned = append(orphaned, *entry.Name)
+			orphan = append(orphan, *entry.Name)
 		}
-
 	}
 
-	// Show orphaned records before we terminate.
-	sort.Strings(orphaned)
-	for _, entry := range orphaned {
+	// show results: valid, orphaned, error
+	sort.Strings(valid)
+	for _, entry := range valid {
+		fmt.Printf("VALID  - %s\n", entry)
+	}
+	sort.Strings(orphan)
+	for _, entry := range orphan {
 		fmt.Printf("ORPHAN - %s\n", entry)
+	}
+	sort.Strings(error)
+	for _, entry := range error {
+		fmt.Printf("ERROR  - %s\n", entry)
 	}
 
 	return 0
