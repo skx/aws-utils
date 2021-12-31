@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -21,6 +22,9 @@ type instancesCommand struct {
 
 	// Path to a file containing roles
 	rolesPath string
+
+	// Should we export our results in JSON format?
+	jsonOutput bool
 }
 
 // Volume holds detailed regarding an instances volumes.
@@ -86,7 +90,8 @@ type InstanceOutput struct {
 
 // Arguments adds per-command args to the object.
 func (i *instancesCommand) Arguments(f *flag.FlagSet) {
-	f.StringVar(&i.rolesPath, "roles", "", "Path to a list of roles to process, one by one")
+	f.StringVar(&i.rolesPath, "roles", "", "Path to a list of roles to process, one by one.")
+	f.BoolVar(&i.jsonOutput, "json", false, "Output the results in JSON.")
 }
 
 // Info returns the name of this subcommand.
@@ -156,13 +161,13 @@ func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interfa
 			out.InstanceAMI = *instance.ImageId
 
 			// Look for the name, which is set via a Tag.
-			i := 0
-			for i < len(instance.Tags) {
+			n := 0
+			for n < len(instance.Tags) {
 
-				if *instance.Tags[i].Key == "Name" {
-					out.InstanceName = *instance.Tags[i].Value
+				if *instance.Tags[n].Key == "Name" {
+					out.InstanceName = *instance.Tags[n].Value
 				}
-				i++
+				n++
 			}
 
 			// Optional values
@@ -194,9 +199,18 @@ func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interfa
 			}
 
 			// Output the rendered template to the console
-			err = tmpl.Execute(os.Stdout, out)
-			if err != nil {
-				return fmt.Errorf("error rendering template %s", err)
+			if i.jsonOutput {
+
+				b, err := json.Marshal(out)
+				if err != nil {
+					return fmt.Errorf("error exporting to JSON %s", err)
+				}
+				fmt.Println(string(b))
+			} else {
+				err = tmpl.Execute(os.Stdout, out)
+				if err != nil {
+					return fmt.Errorf("error rendering template %s", err)
+				}
 			}
 		}
 	}
