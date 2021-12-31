@@ -7,16 +7,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"time"
 
+	"github.com/skx/aws-utils/amiage"
 	"github.com/skx/aws-utils/utils"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
-
-// Cache of creation-time/date
-var cache map[string]string
 
 // Structure for our options and state.
 type csvInstancesCommand struct {
@@ -50,44 +47,6 @@ The export contains:
 Other fields might be added in the future.
 `
 
-}
-
-// Get the creation-date of the given AMI.
-//
-// Values are cached.
-func (c *csvInstancesCommand) amiCreation(svc *ec2.EC2, id string) (string, error) {
-
-	// Lookup in the cache to see if we've already found the creation
-	// date for this AMI
-	cached, ok := cache[id]
-	if ok {
-		return cached, nil
-	}
-
-	// Setup a filter for the AMI we're looking for.
-	input := &ec2.DescribeImagesInput{
-		ImageIds: []*string{
-			aws.String(id),
-		},
-	}
-
-	// Run the search
-	result, err := svc.DescribeImages(input)
-	if err != nil {
-		// Message from an error.
-		return "", fmt.Errorf("error getting image info: %s", err.Error())
-	}
-
-	// If we got a result then we can return the creation time
-	// (as a string)
-	if len(result.Images) > 0 {
-
-		// But save in a cache for the future
-		date := *result.Images[0].CreationDate
-		cache[id] = date
-		return date, nil
-	}
-	return "", fmt.Errorf("no date for %s", id)
 }
 
 // Sync from remote to local
@@ -134,34 +93,16 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 			// AMI name
 			ami := *instance.ImageId
 
-			//
-			// Get the AMI creation-date
-			//
-			create, err := c.amiCreation(svc, ami)
-			if err != nil {
-				return fmt.Errorf("failed to get creation date of %s: %s", ami, err.Error())
+			// Get the AMI age, in days.
+			age, ageErr := amiage.AMIAge(svc, ami)
+			if ageErr != nil {
+				return fmt.Errorf("error getting AMI age for %s: %s", ami, ageErr)
 			}
-
-			//
-			// Parse the date, so we can report how many days
-			// ago the AMI was created.
-			//
-			t, err := time.Parse("2006-01-02T15:04:05.000Z", create)
-			if err != nil {
-				return fmt.Errorf("failed to parse time string %s: %s", create, err)
-			}
-
-			//
-			// Count how old the AMI is in days
-			//
-			date := time.Now()
-			diff := date.Sub(t)
-			create = fmt.Sprintf("%d", (int(diff.Hours() / 24)))
 
 			//
 			// Now show all the information in CSV format
 			//
-			fmt.Printf("%s,%s,%s,%s,%s\n", acct, id, name, ami, create)
+			fmt.Printf("%s,%s,%s,%s,%d\n", acct, id, name, ami, age)
 
 		}
 	}
@@ -170,11 +111,6 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 
 // Execute is invoked if the user specifies this subcommand.
 func (c *csvInstancesCommand) Execute(args []string) int {
-
-	//
-	// Create our cache
-	//
-	cache = make(map[string]string)
 
 	//
 	// Get the connection, using default credentials

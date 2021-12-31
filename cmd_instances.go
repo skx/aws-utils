@@ -10,16 +10,13 @@ import (
 	"fmt"
 	"os"
 	"text/template"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
+	"github.com/skx/aws-utils/amiage"
 	"github.com/skx/aws-utils/utils"
 )
-
-// Cache of creation-time/date
-var amiCache map[string]string
 
 // Structure for our options and state.
 type instancesCommand struct {
@@ -74,7 +71,7 @@ type InstanceOutput struct {
 	InstanceAMI string
 
 	// AMIAge contains the age of the AMI in days.
-	AMIAge string
+	AMIAge int
 
 	// InstanceState holds the instance state (stopped, running, etc)
 	InstanceState string
@@ -123,44 +120,6 @@ aviatrix-gateway - i-012345679abcdef01
 
 }
 
-// Get the creation-date of the given AMI.
-//
-// Values are cached.
-func (i *instancesCommand) amiCreation(svc *ec2.EC2, id string) (string, error) {
-
-	// Lookup in the cache to see if we've already found the creation
-	// date for this AMI
-	cached, ok := amiCache[id]
-	if ok {
-		return cached, nil
-	}
-
-	// Setup a filter for the AMI we're looking for.
-	input := &ec2.DescribeImagesInput{
-		ImageIds: []*string{
-			aws.String(id),
-		},
-	}
-
-	// Run the search
-	result, err := svc.DescribeImages(input)
-	if err != nil {
-		// Message from an error.
-		return "", fmt.Errorf("error getting image info: %s", err.Error())
-	}
-
-	// If we got a result then we can return the creation time
-	// (as a string)
-	if len(result.Images) > 0 {
-
-		// But save in a cache for the future
-		date := *result.Images[0].CreationDate
-		amiCache[id] = date
-		return date, nil
-	}
-	return "", fmt.Errorf("no date for %s", id)
-}
-
 // DumpInstances looks up the appropriate details and outputs them to the
 // console, via the use of a provided template.
 func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interface{}) error {
@@ -205,29 +164,11 @@ func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interfa
 			out.InstanceType = *instance.InstanceType
 			out.InstanceAMI = *instance.ImageId
 
-			//
-			// Get the AMI creation-date
-			//
-			create, err := i.amiCreation(svc, out.InstanceAMI)
+			// Get the AMI age, in days.
+			out.AMIAge, err = amiage.AMIAge(svc, out.InstanceAMI)
 			if err != nil {
-				return fmt.Errorf("failed to get creation date of %s: %s", out.InstanceAMI, err.Error())
+				return fmt.Errorf("error getting AMI age for %s: %s", out.InstanceAMI, err)
 			}
-
-			//
-			// Parse the date, so we can report how many days
-			// ago the AMI was created.
-			//
-			t, err := time.Parse("2006-01-02T15:04:05.000Z", create)
-			if err != nil {
-				return fmt.Errorf("failed to parse time string %s: %s", create, err)
-			}
-
-			//
-			// Count how old the AMI is in days
-			//
-			date := time.Now()
-			diff := date.Sub(t)
-			out.AMIAge = fmt.Sprintf("%d", (int(diff.Hours() / 24)))
 
 			// Look for the name, which is set via a Tag.
 			n := 0
@@ -270,7 +211,8 @@ func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interfa
 			// Output the rendered template to the console
 			if i.jsonOutput {
 
-				b, err := json.Marshal(out)
+				var b []byte
+				b, err = json.Marshal(out)
 				if err != nil {
 					return fmt.Errorf("error exporting to JSON %s", err)
 				}
@@ -351,11 +293,6 @@ func readBlockDevicesFromInstance(instance *ec2.Instance, conn *ec2.EC2) (map[st
 
 // Execute is invoked if the user specifies this subcommand.
 func (i *instancesCommand) Execute(args []string) int {
-
-	//
-	// Create our cache
-	//
-	amiCache = make(map[string]string)
 
 	//
 	// Create the template we'll use for output
