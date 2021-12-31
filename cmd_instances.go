@@ -112,14 +112,13 @@ fashion.
 
 aviatrix-gateway - i-012345679abcdef01
 -----------------------------------------------------------
-        AMI: ami-0d3ba21723ec0dc5d
-        AMI Age: 3 days
+        AMI          : ami-0d3ba21723ec0dc5d
+        AMI Age      : 3 days
         Instance type: t2.small
         Public  IPv4 address: 3.127.201.130
         Private IPv4 address: 10.10.3.78
-        State: running
         Volumes:
-        vol-05c23836682aceab8 attached as /dev/sda1     Size:16GiB      IOPS:100
+          /dev/sda1  vol-05c23836682aceab8      Size:16GiB      IOPS:100
 `
 
 }
@@ -364,7 +363,7 @@ func (i *instancesCommand) Execute(args []string) int {
 	text := `
 {{.InstanceName}} {{.InstanceID}}
   AMI         : {{.InstanceAMI}}
-  AMI Age     : {{.AMIAge}}
+  AMI Age     : {{.AMIAge}} days
   AWS Account : {{.AWSAccount}}
 {{- if .SSHKeyName  }}
   KeyName     : {{.SSHKeyName}}
@@ -377,7 +376,7 @@ func (i *instancesCommand) Execute(args []string) int {
 {{- end}}
 {{if .Volumes}}
   Volumes:{{range .Volumes}}
-     {{.ID}} mounted on {{.Device}} Size:{{.Size}}GiB Type:{{.Type}} Encrypted:{{.Encrypted}} IOPS:{{.IOPS}}{{end}}
+     {{.Device}} {{.ID}} Size:{{.Size}}GiB Type:{{.Type}} Encrypted:{{.Encrypted}} IOPS:{{.IOPS}}{{end}}
 {{end}}
 `
 	tmpl := template.Must(template.New("output").Parse(text))

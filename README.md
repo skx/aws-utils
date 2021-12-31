@@ -149,11 +149,11 @@ Sample output:
 ```
 i-01066633e12345567 - prod-fooapp-uk
 ------------------------------------
-	AMI: ami-01234567890abcdef
+	AMI          : ami-01234567890abcdef
+    AMI Age      : 4 days
 	Instance type: t3.medium
-	Key name: sysadmin1
-	Private IPv4: 10.30.44.105
-	State: running
+	Key name     : sysadmin1
+	Private IPv4 : 10.30.44.105
 	Volumes:
 		/dev/sda1	vol-01234567890abcdef	100Gb	gp2	Encrypted:true	IOPs:300
 ```
