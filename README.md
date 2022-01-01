@@ -1,3 +1,7 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/skx/aws-utils)](https://goreportcard.com/report/github.com/skx/aws-utils)
+[![license](https://img.shields.io/github/license/skx/aws-utils.svg)](https://github.com/skx/aws-utils/blob/master/LICENSE)
+[![Release](https://img.shields.io/github/release/skx/aws-utils.svg)](https://github.com/skx/aws-utils/releases/latest)
+
 # AWS Utils
 
 This repository contains a simple CLI utility with a number of useful sub-commands implemented for working with AWS
