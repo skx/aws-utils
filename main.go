@@ -39,6 +39,7 @@ func main() {
 	subcommands.Register(&orphanedZonesCommand{})
 	subcommands.Register(&rotateKeysCommand{})
 	subcommands.Register(&sgGrepCommand{})
+	subcommands.Register(&stacksCommand{})
 	subcommands.Register(&whitelistSelfCommand{})
 	subcommands.Register(&versionCommand{})
 	subcommands.Register(&whoamiCommand{})

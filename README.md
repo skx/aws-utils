@@ -48,6 +48,7 @@ Please specify a valid subcommand, choices are:
 	orphaned-zones  Show orphaned Route53 zones.
 	rotate-keys     Rotate your AWS access keys.
 	sg-grep         Security-Group Grep
+	stacks          List all cloudformation stack-names.
 	version         Show the version of this binary.
 	whitelist-self  Update security-groups with your external IP.
 	whoami          Show the current AWS user or role name.
@@ -119,6 +120,7 @@ The following sub-commands are available:
 * [orphaned-zones](#orphaned-zones)
 * [rotate-keys](#rotate-keys)
 * [sg-grep](#sg-grep)
+* [stacks](#stacks)
 * [whitelist-self](#whitelist-self)
 * [whoami](#whoami)
 
@@ -234,6 +236,27 @@ Usage:
 ```sh
 $ aws-utils sg-grep [-roles=/path/to/roles] search-term1 search-term2 ..
 ```
+
+
+
+### `stacks`
+
+Show the names, and optionally the statuses of all cloudformation stacks.
+
+This is useful for applying stack-policies to a list of stacks, for example, and avoids the use of more complex CLI invocations when using the AWS CLI.
+
+Usage:
+
+```sh
+$ aws-utils stacks
+StackSet-09c62176-4401-4c2e-b018-b3983c37619d
+my-prod--iam
+my-prod--lifecycel-manager
+my-prod--route53
+```
+
+Optionally you may display the stack-status, and include deleted-stacks.
+
 
 
 
