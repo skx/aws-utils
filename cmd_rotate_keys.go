@@ -225,18 +225,25 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 		return 1
 	}
 
+	awsAccessKeyID := false
+	awsSecretAccessKeyID := false
+
 	// Rewrite here.
 	for _, line := range content {
 
 		// Update in-place
-		if strings.HasPrefix(line, "aws_access_key_id") {
+		if !awsAccessKeyID && strings.HasPrefix(line, "aws_access_key_id") {
+
+			// only update the first one
 			out.WriteString("aws_access_key_id=" + *created.AccessKey.AccessKeyId + "\n")
+			awsAccessKeyID = true
 			continue
 		}
 
 		// Update in-place
-		if strings.HasPrefix(line, "aws_secret_access_key") {
+		if !awsSecretAccessKeyID && strings.HasPrefix(line, "aws_secret_access_key") {
 			out.WriteString("aws_secret_access_key=" + *created.AccessKey.SecretAccessKey + "\n")
+			awsSecretAccessKeyID = true
 			continue
 		}
 
