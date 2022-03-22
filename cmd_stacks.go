@@ -100,20 +100,28 @@ func (sc *stacksCommand) DisplayStacks(svc *ec2.EC2, account string, void interf
 		return err
 	}
 
-	// Create a map for recording name => status.
+	// Create a map for recording name => [status1, status2..].
 	//
-	// We do this because we want to show the stack-names in a
-	// sorted-order.
-	lookup := make(map[string]string)
+	// We do this primarily because we want to show the
+	// stack-names in sorted-order.
+	lookup := make(map[string][]string)
 
 	// Get all the stacks, and save their names/statuses in
 	// a lookup table.
 	for _, ent := range resp.StackSummaries {
 
+		// Get the nam/status
 		name := *ent.StackName
 		status := *ent.StackStatus
 
-		lookup[name] = status
+		// Append the status to the name.
+		//
+		// This is necessary because the same stack-name might
+		// be present multiple times, in different states:
+		//
+		//  [DELETE_COMPLETE, DELETE_COMPLETE, UPDATE_COMPLETE]
+		//
+		lookup[name] = append(lookup[name], status)
 	}
 
 	// Sort the stack-names.
@@ -126,11 +134,23 @@ func (sc *stacksCommand) DisplayStacks(svc *ec2.EC2, account string, void interf
 	// Now we have a sorted list of stack-names we can iterate over them
 	for _, key := range keys {
 
-		// The stack-status comes from the lookup-map.
+		// The stack-statuses comes from the lookup-map.
 		val := lookup[key]
 
-		// Skip deleted stacks, unless `-all` was specified.
-		if !sc.all && strings.Contains(val, "DELETE") {
+		// A stack might appear multiple times, in different
+		// states:
+		//
+		// DELETE_COMPLETE, DELETE_COMPLETE, UPDATE_COMPLETE
+		show := false
+
+		// Don't show if "DELETE_COMPLETE"
+		for _, state := range val {
+			if !strings.Contains(state, "DELETE") {
+				show = true
+			}
+		}
+
+		if !sc.all && !show {
 			continue
 		}
 
@@ -139,7 +159,7 @@ func (sc *stacksCommand) DisplayStacks(svc *ec2.EC2, account string, void interf
 
 		// If `-status` show the status too
 		if sc.status {
-			fmt.Printf(" %s", val)
+			fmt.Printf(" [%s]", strings.Join(val, ","))
 		}
 
 		// Newline
