@@ -33,6 +33,9 @@ type ToChange struct {
 
 	// The port which will be whitelisted (TCP-only).
 	Port int
+
+	// Display contains a message to display to the user.
+	Display string
 }
 
 // Structure for our options and state.
@@ -173,7 +176,7 @@ func (i *whitelistSelfCommand) processSG(svc *ec2.EC2, groupid, desc string, por
 	for _, sg := range current.SecurityGroups {
 		for _, ipp := range sg.IpPermissions {
 			for _, ipr := range ipp.IpRanges {
-				if desc == *ipr.Description {
+				if ipr.Description != nil && desc == *ipr.Description {
 					count++
 				}
 			}
@@ -208,7 +211,7 @@ func (i *whitelistSelfCommand) processSG(svc *ec2.EC2, groupid, desc string, por
 			for _, ipr := range ipp.IpRanges {
 
 				// Look for the description which is ours
-				if desc == *ipr.Description {
+				if ipr.Description != nil && desc == *ipr.Description {
 
 					// If the IP is the same
 					// then we do nothing
@@ -312,6 +315,10 @@ func (i *whitelistSelfCommand) handleSecurityGroup(entry ToChange, sess *session
 	fmt.Printf("  IP:              %s\n", i.IP)
 	fmt.Printf("  Port:            %d\n", entry.Port)
 	fmt.Printf("  Description:     %s\n", entry.Name)
+
+	if entry.Display != "" {
+		fmt.Printf("  %s\n", entry.Display)
+	}
 
 	// Remove any existing rule with this name/description
 	err := i.processSG(svc, entry.SG, entry.Name, int64(entry.Port))
