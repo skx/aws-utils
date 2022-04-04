@@ -235,20 +235,34 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 		if !awsAccessKeyID && strings.HasPrefix(line, "aws_access_key_id") {
 
 			// only update the first one
-			out.WriteString("aws_access_key_id=" + *created.AccessKey.AccessKeyId + "\n")
+			_, err := out.WriteString("aws_access_key_id=" + *created.AccessKey.AccessKeyId + "\n")
+			if err != nil {
+				fmt.Printf("error writing to file:%s\n", err.Error())
+				return 1
+			}
 			awsAccessKeyID = true
 			continue
 		}
 
 		// Update in-place
 		if !awsSecretAccessKeyID && strings.HasPrefix(line, "aws_secret_access_key") {
-			out.WriteString("aws_secret_access_key=" + *created.AccessKey.SecretAccessKey + "\n")
+			_, err := out.WriteString("aws_secret_access_key=" + *created.AccessKey.SecretAccessKey + "\n")
+			if err != nil {
+				fmt.Printf("error writing to file:%s\n", err.Error())
+				return 1
+			}
+
 			awsSecretAccessKeyID = true
 			continue
 		}
 
 		// Otherwise copy the old line into place.
-		out.WriteString(line + "\n")
+		_, err := out.WriteString(line + "\n")
+		if err != nil {
+			fmt.Printf("error writing to file:%s\n", err.Error())
+			return 1
+		}
+
 	}
 
 	// Close the output file
