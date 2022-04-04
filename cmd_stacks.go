@@ -5,9 +5,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -17,8 +20,17 @@ import (
 // Structure for our options and state.
 type stacksCommand struct {
 
+	// filter allows filtering the returned stack-names
+	filter string
+
 	// Path to a file containing roles
 	rolesPath string
+
+	// policyPath is the policy-file to apply.
+	policyPath string
+
+	// policy is the contents of the policy file to apply
+	policy string
 
 	// Show status too?
 	status bool
@@ -30,6 +42,8 @@ type stacksCommand struct {
 // Arguments adds per-command args to the object.
 func (sc *stacksCommand) Arguments(f *flag.FlagSet) {
 	f.StringVar(&sc.rolesPath, "roles", "", "Path to a list of roles to process, one by one")
+	f.StringVar(&sc.filter, "filter", "", "Show only stacks matching this filter")
+	f.StringVar(&sc.policyPath, "policy", "", "Path to a stack-policy to apply to all stacks")
 	f.BoolVar(&sc.status, "status", false, "Show the stack-status as well as the name?")
 	f.BoolVar(&sc.all, "all", false, "Show even deleted stacks?")
 }
@@ -45,12 +59,28 @@ This command allows you to list the names of all cloudformation stacks.
 Listing stacks via the AWS CLI is otherwise a bit annoying, and here we
 take care of excluding deleted stacks by default.  This makes it simpler
 to use for scripting, and removes the necessity to have 'jq' available.
+
+Once way to use this is to apply a stack policy to all stacks, that
+can be done via the '-policy' argument.
 `
 
 }
 
 // Execute is invoked if the user specifies this sub-command.
 func (sc *stacksCommand) Execute(args []string) int {
+
+	//
+	// If we have a policy-path then read it into our policy
+	//
+	if sc.policyPath != "" {
+		content, err := os.ReadFile(sc.policyPath)
+		if err != nil {
+			fmt.Printf("error reading %s: %s\n", sc.policyPath, err)
+			return 1
+		}
+
+		sc.policy = string(content)
+	}
 
 	//
 	// Get the connection, using default credentials
@@ -150,6 +180,19 @@ func (sc *stacksCommand) DisplayStacks(svc *ec2.EC2, account string, void interf
 			}
 		}
 
+		// Should we filter this stack out?
+		if sc.filter != "" {
+			// If it doesn't match then skip it.
+			match, er := regexp.MatchString(sc.filter, key)
+			if er != nil {
+				return fmt.Errorf("error running regexp match of %s against %s: %s\n", sc.filter, key, er)
+			}
+			if !match {
+				show = false
+			}
+		}
+
+		// Are we showing all?
 		if !sc.all && !show {
 			continue
 		}
@@ -160,6 +203,26 @@ func (sc *stacksCommand) DisplayStacks(svc *ec2.EC2, account string, void interf
 		// If `-status` show the status too
 		if sc.status {
 			fmt.Printf(" [%s]", strings.Join(val, ","))
+		}
+
+		// Applying a policy?
+		if sc.policy != "" {
+
+			// Create the parameters
+			params := &cloudformation.SetStackPolicyInput{
+				StackName:       aws.String(key),
+				StackPolicyBody: aws.String(sc.policy),
+			}
+
+			// Set the policy
+			resp, err := cf.SetStackPolicy(params)
+			if err != nil {
+				fmt.Printf("error calling SetStackPolicy %s\n", err)
+				return err
+			}
+
+			// Show the response
+			fmt.Printf("SetStackPolicy(%s) -> %s\n", key, resp)
 		}
 
 		// Newline
