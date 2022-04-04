@@ -185,7 +185,7 @@ func (sc *stacksCommand) DisplayStacks(svc *ec2.EC2, account string, void interf
 			// If it doesn't match then skip it.
 			match, er := regexp.MatchString(sc.filter, key)
 			if er != nil {
-				return fmt.Errorf("error running regexp match of %s against %s: %s\n", sc.filter, key, er)
+				return fmt.Errorf("error running regexp match of %s against %s: %s", sc.filter, key, er)
 			}
 			if !match {
 				show = false
