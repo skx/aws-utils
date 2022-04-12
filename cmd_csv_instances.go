@@ -20,6 +20,9 @@ type csvInstancesCommand struct {
 
 	// Path to a file containing roles
 	rolesPath string
+
+	// Have we shown the CSV header?
+	header bool
 }
 
 // Arguments adds per-command args to the object.
@@ -97,6 +100,11 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 			age, ageErr := amiage.AMIAge(svc, ami)
 			if ageErr != nil {
 				return fmt.Errorf("error getting AMI age for %s: %s", ami, ageErr)
+			}
+
+			if !c.header {
+				fmt.Printf("Account, Instance ID, Name, AMI, AMI Age\n")
+				c.header = true
 			}
 
 			//
