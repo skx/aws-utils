@@ -33,7 +33,8 @@ func (sc *subnetsCommand) Info() (string, string) {
 Details:
 
 This command allows you to list the names of all subnets, and their
-names.
+associated CIDR ranges.  All available VPCs will be exported in a
+simple CSV format, complete with header.
 `
 
 }
