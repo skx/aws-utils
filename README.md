@@ -4,7 +4,15 @@
 
 # AWS Utils
 
-This repository contains a simple CLI utility with a number of useful sub-commands implemented for working with AWS
+This repository contains a simple CLI utility with a number of useful sub-commands for working with AWS, particularly for scripting and automation purposes.
+
+
+## Motivation
+
+Several of the things that this tool does are possible via existing AWS utilities, such as the `aws-cli` package.  However the difference in this tool is that it allows working across roles as a single command - so rather than running an export/list command 20+ times in the traditional way, you can run one command passing the list of roles to use, and all output will be created at once.
+
+Other sub-commands are just more useful, for example listing the available cloudformation stack-names with `aws-cli` will include deleted ones too, which need to be filtered out.  Or allowing all stacks to be updated with a stack protection policy as a single command is just a time-saver.
+
 
 
 ## Installation
@@ -245,6 +253,8 @@ Show the names, and optionally the statuses of all cloudformation stacks.
 
 This is useful for applying stack-policies to a list of stacks, for example, and avoids the use of more complex CLI invocations when using the AWS CLI.
 
+You can also update all stacks with a protection policy in a single operation.
+
 Usage:
 
 ```sh
@@ -253,6 +263,9 @@ StackSet-09c62176-4401-4c2e-b018-b3983c37619d
 my-prod--iam
 my-prod--lifecycel-manager
 my-prod--route53
+..
+
+$ aws-utils stacks -policy ./my-stack-policy.json
 ```
 
 Optionally you may display the stack-status, and include deleted-stacks.
@@ -278,6 +291,8 @@ $ cat input.json
 
 Valid values for the JSON object are:
 
+* `Display`
+  * A message to display when the group is updated, good for documentation.
 * `SG`
   * The ID of the security-group to update.
 * `Name`
