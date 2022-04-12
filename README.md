@@ -57,6 +57,7 @@ Please specify a valid subcommand, choices are:
 	rotate-keys     Rotate your AWS access keys.
 	sg-grep         Security-Group Grep
 	stacks          List all cloudformation stack-names.
+    subnets         List subnets in all VPCs.
 	version         Show the version of this binary.
 	whitelist-self  Update security-groups with your external IP.
 	whoami          Show the current AWS user or role name.
@@ -129,6 +130,7 @@ The following sub-commands are available:
 * [rotate-keys](#rotate-keys)
 * [sg-grep](#sg-grep)
 * [stacks](#stacks)
+* [subnets](#subnets)
 * [whitelist-self](#whitelist-self)
 * [whoami](#whoami)
 
@@ -269,6 +271,25 @@ $ aws-utils stacks -policy ./my-stack-policy.json
 ```
 
 Optionally you may display the stack-status, and include deleted-stacks.
+
+
+
+
+### `subnets`
+
+Show the subnets, along with associated CIDR ranges, available within all VPCs.
+
+This is useful when you're running a penetration test, or want a quick overview of all the available subnets across a bunch of accounts.
+
+Usage:
+
+```sh
+$ aws-utils subnets
+Account, VPC, Subnet Name, Subnet ID, Cidr
+207250808959,vpc-bbe705d2,default-eu-central-1a,subnet-b4df30dd,172.31.16.0/20
+207250808959,vpc-bbe705d2,default-eu-central-1b,subnet-406c6238,172.31.0.0/20
+207250808959,vpc-bbe705d2,default-eu-central-1a,subnet-44fad80e,172.31.32.0/20
+```
 
 
 
