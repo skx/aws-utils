@@ -58,6 +58,7 @@ example:
 Valid fields are
 
 * "account" - The AWS account-number.
+* "az" - The availability zone within which the instance is running.
 * "ami" - The AMI name of the running instance.
 * "amiage" - The age of the AMI in days.
 * "id" - The instance ID.
@@ -66,7 +67,9 @@ Valid fields are
 * "publicipv4" - The (public) IPv4 address associated with the instance.
 * "ssh-key" - The SSH key setup for this instance.
 * "state" - The instance state (running, pending, etc).
-* "type" - The instance type (t2.small, t3.large, etc)
+* "subnetid" - The subnet within which the instance is running.
+* "type" - The instance type (t2.small, t3.large, etc).
+* "vpcid" - The VPC within which the instance is running.
 `
 
 }
@@ -105,6 +108,8 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 					fmt.Printf("AMI")
 				case "amiage":
 					fmt.Printf("AMI Age")
+				case "az":
+					fmt.Printf("Availability Zone")
 				case "id":
 					fmt.Printf("Instance ID")
 				case "name":
@@ -117,8 +122,12 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 					fmt.Printf("SSH Key")
 				case "state":
 					fmt.Printf("Instance State")
+				case "subnetid":
+					fmt.Printf("Subnet ID")
 				case "type":
 					fmt.Printf("Instance Type")
+				case "vpcid":
+					fmt.Printf("VPC ID")
 				default:
 					fmt.Printf("unknown field:%s", field)
 				}
@@ -142,6 +151,8 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 				fmt.Printf("%s", obj.InstanceAMI)
 			case "amiage":
 				fmt.Printf("%d", obj.AMIAge)
+			case "az":
+				fmt.Printf("%s", obj.AvailabilityZone)
 			case "id":
 				fmt.Printf("%s", obj.InstanceID)
 			case "name":
@@ -154,8 +165,12 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 				fmt.Printf("%s", obj.SSHKeyName)
 			case "state":
 				fmt.Printf("%s", obj.InstanceState)
+			case "subnetid":
+				fmt.Printf("%s", obj.SubnetID)
 			case "type":
 				fmt.Printf("%s", obj.InstanceType)
+			case "vpcid":
+				fmt.Printf("%s", obj.VPCID)
 			default:
 				fmt.Printf("unknown field:%s", field)
 			}

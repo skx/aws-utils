@@ -43,6 +43,9 @@ type InstanceOutput struct {
 	// AWSAccount is the account number we're running under
 	AWSAccount string
 
+	// AvailabilityZone is the zone in which this instance is running
+	AvailabilityZone string
+
 	// InstanceID holds the AWS instance ID
 	InstanceID string
 
@@ -64,6 +67,9 @@ type InstanceOutput struct {
 	// Keypair setup for access.
 	SSHKeyName string
 
+	// SubnetID is the ID of the subnet the instance is running within.
+	SubnetID string
+
 	// PublicIPv4 has the public IPv4 address
 	PublicIPv4 string
 
@@ -72,6 +78,9 @@ type InstanceOutput struct {
 
 	// Volumes holds all known volumes
 	Volumes []Volume
+
+	// VPCID is the ID of the VPC the instance is running within.
+	VPCID string
 }
 
 // GetInstances returns details about our running instances.
@@ -109,6 +118,9 @@ func GetInstances(svc *ec2.EC2, acct string) ([]InstanceOutput, error) {
 
 			// Values which are always present.
 			out.AWSAccount = acct
+			out.AvailabilityZone = *instance.Placement.AvailabilityZone
+			out.SubnetID = *instance.SubnetId
+			out.VPCID = *instance.VpcId
 			out.InstanceID = *instance.InstanceId
 			out.InstanceName = *instance.InstanceId
 			out.InstanceState = *instance.State.Name
