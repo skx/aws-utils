@@ -90,9 +90,17 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 	}
 
 	// Split the fields, by comma
-	fields := strings.Split(format, ",")
+	supplied := strings.Split(format, ",")
 
-	// For each one we've found
+	// Ensure all fields are lower-cased and stripped of spaces
+	fields := []string{}
+	for _, field := range supplied {
+		field = strings.TrimSpace(field)
+		field = strings.ToLower(field)
+		fields = append(fields, field)
+	}
+
+	// For each instance we've discovered
 	for _, obj := range ret {
 
 		// If we've not printed the header..
@@ -103,9 +111,9 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 
 				switch field {
 				case "account":
-					fmt.Printf("Account")
+					fmt.Printf("Account ID")
 				case "ami":
-					fmt.Printf("AMI")
+					fmt.Printf("AMI ID")
 				case "amiage":
 					fmt.Printf("AMI Age")
 				case "az":
@@ -133,11 +141,14 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 				}
 
 				// if this isn't the last one, add ","
-				if i < len(fields) {
+				if i < len(fields)-1 {
 					fmt.Printf(",")
 				}
 
 			}
+
+			// Terminate the header with a newline
+			fmt.Printf("\n")
 			c.header = true
 		}
 
@@ -176,7 +187,7 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 			}
 
 			// if this isn't the last one, add ","
-			if i < len(fields) {
+			if i < len(fields)-1 {
 				fmt.Printf(",")
 			}
 		}
