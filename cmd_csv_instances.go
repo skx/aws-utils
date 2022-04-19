@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/skx/aws-utils/instances"
 	"github.com/skx/aws-utils/utils"
@@ -22,11 +23,15 @@ type csvInstancesCommand struct {
 
 	// Have we shown the CSV header?
 	header bool
+
+	// Format string to print
+	format string
 }
 
 // Arguments adds per-command args to the object.
 func (c *csvInstancesCommand) Arguments(f *flag.FlagSet) {
 	f.StringVar(&c.rolesPath, "roles", "", "Path to a list of roles to process, one by one")
+	f.StringVar(&c.format, "format", "", "Format string of the fields to print")
 }
 
 // Info returns the name of this subcommand.
@@ -38,38 +43,118 @@ Details:
 This command exports a list of the running instances which are available
 to the logged in account, in CSV format.
 
-The export contains:
+By default the export contains the following fields:
 
 * Account ID
 * Instance ID
 * Instance Name
 * AMI ID
-* Age of AMI in days
 
-Other fields might be added in the future.
+You can specify a different output via the 'format' argument, for
+example:
+
+     aws-utils csv-instances --format="account,id,name,ipv4address"
 `
 
 }
 
-// Sync from remote to local
+// DumpCSV outputs the list of running instances.
 func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{}) error {
 
+	// Get the running instances.
 	ret, err := instances.GetInstances(svc, acct)
-
 	if err != nil {
 		return err
 	}
 
+	// Get the format-string
+	format := c.format
+	if format == "" {
+		format = "account,id,name,ami"
+	}
+
+	// Split the fields, by comma
+	fields := strings.Split(format, ",")
+
+	// For each one we've found
 	for _, obj := range ret {
+
+		// If we've not printed the header..
 		if !c.header {
-			fmt.Printf("Account, Instance ID, Name, AMI, AMI Age\n")
+
+			// Show something human-readable
+			for i, field := range fields {
+
+				switch field {
+				case "account":
+					fmt.Printf("Account")
+				case "ami":
+					fmt.Printf("AMI")
+				case "amiage":
+					fmt.Printf("AMI Age")
+				case "id":
+					fmt.Printf("Instance ID")
+				case "privateipv4":
+					fmt.Printf("PrivateIPv4")
+				case "publicipv4":
+					fmt.Printf("PublicIPv4")
+				case "ssh-key":
+					fmt.Printf("SSH Key")
+				case "state":
+					fmt.Printf("Instance State")
+				case "type":
+					fmt.Printf("Instance Type")
+				case "name":
+					fmt.Printf("Name")
+				default:
+					fmt.Printf("unknown field:%s", field)
+				}
+
+				// if this isn't the last one, add ","
+				if i < len(fields) {
+					fmt.Printf(",")
+				}
+
+			}
 			c.header = true
 		}
 
-		//
-		// Now show all the information in CSV format
-		//
-		fmt.Printf("%s,%s,%s,%s,%d\n", acct, obj.InstanceID, obj.InstanceName, obj.InstanceAMI, obj.AMIAge)
+		// Show each field
+		for i, field := range fields {
+
+			switch field {
+			case "account":
+				fmt.Printf("%s", acct)
+			case "ami":
+				fmt.Printf("%s", obj.InstanceAMI)
+			case "amiage":
+				fmt.Printf("%d", obj.AMIAge)
+			case "id":
+				fmt.Printf("%s", obj.InstanceID)
+			case "privateipv4":
+				fmt.Printf("%s", obj.PrivateIPv4)
+			case "publicipv4":
+				fmt.Printf("%s", obj.PublicIPv4)
+			case "ssh-key":
+				fmt.Printf("%s", obj.SSHKeyName)
+			case "state":
+				fmt.Printf("%s", obj.InstanceState)
+			case "type":
+				fmt.Printf("%s", obj.InstanceType)
+			case "name":
+				fmt.Printf("%s", obj.InstanceName)
+			default:
+				fmt.Printf("unknown field:%s", field)
+			}
+
+			// if this isn't the last one, add ","
+			if i < len(fields) {
+				fmt.Printf(",")
+			}
+		}
+
+		// Newline between records
+		fmt.Printf("\n")
 
 	}
 	return nil

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"text/template"
 
@@ -24,11 +25,15 @@ type instancesCommand struct {
 
 	// Should we export our results in JSON format?
 	jsonOutput bool
+
+	// Specify a non-default template?
+	templatePath string
 }
 
 // Arguments adds per-command args to the object.
 func (i *instancesCommand) Arguments(f *flag.FlagSet) {
 	f.StringVar(&i.rolesPath, "roles", "", "Path to a list of roles to process, one by one.")
+	f.StringVar(&i.templatePath, "template", "", "Path to a template to render, instead of the default")
 	f.BoolVar(&i.jsonOutput, "json", false, "Output the results in JSON.")
 }
 
@@ -61,11 +66,13 @@ func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interfa
 	// Cast our template back into the correct object-type
 	tmpl := void.(*template.Template)
 
+	// Get the instances that are running.
 	ret, err := instances.GetInstances(svc, acct)
 	if err != nil {
 		return err
 	}
 
+	// For each one, output the appropriate thing.
 	for _, obj := range ret {
 
 		// Output the rendered template to the console
@@ -112,7 +119,25 @@ func (i *instancesCommand) Execute(args []string) int {
      {{.Device}} {{.ID}} Size:{{.Size}}GiB Type:{{.Type}} Encrypted:{{.Encrypted}} IOPS:{{.IOPS}}{{end}}
 {{end}}
 `
-	tmpl := template.Must(template.New("output").Parse(text))
+
+	// If the user specified a template-path then use it
+	if i.templatePath != "" {
+		content, err := ioutil.ReadFile(i.templatePath)
+		if err != nil {
+			fmt.Printf("failed to read %s:%s\n", i.templatePath, err.Error())
+			return 1
+
+		}
+
+		text = string(content)
+	}
+
+	// Compile the template
+	tmpl, err := template.New("output").Parse(text)
+	if err != nil {
+		fmt.Printf("failed to compile template:%s\n", err.Error())
+		return 1
+	}
 
 	//
 	// Get the connection, using default credentials
