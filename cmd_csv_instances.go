@@ -8,10 +8,9 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/skx/aws-utils/amiage"
+	"github.com/skx/aws-utils/instances"
 	"github.com/skx/aws-utils/utils"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
@@ -55,64 +54,23 @@ Other fields might be added in the future.
 // Sync from remote to local
 func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{}) error {
 
-	// Get the instances which are running/pending
-	params := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("instance-state-name"),
-				Values: []*string{aws.String("running"), aws.String("pending")},
-			},
-		},
-	}
+	ret, err := instances.GetInstances(svc, acct)
 
-	// Create new EC2 client
-	result, err := svc.DescribeInstances(params)
 	if err != nil {
-		return fmt.Errorf("DescribeInstances failed: %s", err)
+		return err
 	}
 
-	// For each instance show stuff
-	for _, reservation := range result.Reservations {
-		for _, instance := range reservation.Instances {
-
-			// We have a running EC2 instnace.
-
-			// Collect the data we want
-			id := *instance.InstanceId
-
-			// Find the name.
-			name := *instance.InstanceId
-
-			// Look for the name, which is set via a Tag.
-			i := 0
-			for i < len(instance.Tags) {
-
-				if *instance.Tags[i].Key == "Name" {
-					name = *instance.Tags[i].Value
-				}
-				i++
-			}
-
-			// AMI name
-			ami := *instance.ImageId
-
-			// Get the AMI age, in days.
-			age, ageErr := amiage.AMIAge(svc, ami)
-			if ageErr != nil {
-				return fmt.Errorf("error getting AMI age for %s: %s", ami, ageErr)
-			}
-
-			if !c.header {
-				fmt.Printf("Account, Instance ID, Name, AMI, AMI Age\n")
-				c.header = true
-			}
-
-			//
-			// Now show all the information in CSV format
-			//
-			fmt.Printf("%s,%s,%s,%s,%d\n", acct, id, name, ami, age)
-
+	for _, obj := range ret {
+		if !c.header {
+			fmt.Printf("Account, Instance ID, Name, AMI, AMI Age\n")
+			c.header = true
 		}
+
+		//
+		// Now show all the information in CSV format
+		//
+		fmt.Printf("%s,%s,%s,%s,%d\n", acct, obj.InstanceID, obj.InstanceName, obj.InstanceAMI, obj.AMIAge)
+
 	}
 	return nil
 }
