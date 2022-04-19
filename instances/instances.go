@@ -105,9 +105,7 @@ func GetInstances(svc *ec2.EC2, acct string) ([]InstanceOutput, error) {
 		for _, instance := range reservation.Instances {
 
 			// We have a running EC2 instance, we'll populate
-			// the InstanceOutput structure with details which we
-			// can then print using a simple template.
-			//
+			// the InstanceOutput structure with details.
 
 			// Values which are always present.
 			out.AWSAccount = acct

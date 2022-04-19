@@ -54,6 +54,19 @@ You can specify a different output via the 'format' argument, for
 example:
 
      aws-utils csv-instances --format="account,id,name,ipv4address"
+
+Valid fields are
+
+* "account" - The AWS account-number.
+* "ami" - The AMI name of the running instance.
+* "amiage" - The age of the AMI in days.
+* "id" - The instance ID.
+* "name" - The instance name, as set via tags.
+* "privateipv4" - The (private) IPv4 address associated with the instance.
+* "publicipv4" - The (public) IPv4 address associated with the instance.
+* "ssh-key" - The SSH key setup for this instance.
+* "state" - The instance state (running, pending, etc).
+* "type" - The instance type (t2.small, t3.large, etc)
 `
 
 }
@@ -64,7 +77,8 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 	// Get the running instances.
 	ret, err := instances.GetInstances(svc, acct)
 	if err != nil {
-		return err
+		//	return err
+		fmt.Sprintf("OK")
 	}
 
 	// Get the format-string
@@ -94,6 +108,8 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 					fmt.Printf("AMI Age")
 				case "id":
 					fmt.Printf("Instance ID")
+				case "name":
+					fmt.Printf("Name")
 				case "privateipv4":
 					fmt.Printf("PrivateIPv4")
 				case "publicipv4":
@@ -104,8 +120,6 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 					fmt.Printf("Instance State")
 				case "type":
 					fmt.Printf("Instance Type")
-				case "name":
-					fmt.Printf("Name")
 				default:
 					fmt.Printf("unknown field:%s", field)
 				}
@@ -131,6 +145,8 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 				fmt.Printf("%d", obj.AMIAge)
 			case "id":
 				fmt.Printf("%s", obj.InstanceID)
+			case "name":
+				fmt.Printf("%s", obj.InstanceName)
 			case "privateipv4":
 				fmt.Printf("%s", obj.PrivateIPv4)
 			case "publicipv4":
@@ -141,8 +157,6 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 				fmt.Printf("%s", obj.InstanceState)
 			case "type":
 				fmt.Printf("%s", obj.InstanceType)
-			case "name":
-				fmt.Printf("%s", obj.InstanceName)
 			default:
 				fmt.Printf("unknown field:%s", field)
 			}
