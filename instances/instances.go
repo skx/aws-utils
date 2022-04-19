@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/skx/aws-utils/amiage"
+	"github.com/skx/aws-utils/tag2name"
 )
 
 // Volume holds detailed regarding an instances volumes.
@@ -134,14 +135,9 @@ func GetInstances(svc *ec2.EC2, acct string) ([]InstanceOutput, error) {
 			}
 
 			// Look for the name, which is set via a Tag.
-			n := 0
-			for n < len(instance.Tags) {
-
-				if *instance.Tags[n].Key == "Name" {
-					out.InstanceName = *instance.Tags[n].Value
-				}
-				n++
-			}
+			//
+			// Default back to the InstanceID if no name was set.
+			out.InstanceName = tag2name.Lookup(instance.Tags, *instance.InstanceId)
 
 			// Optional values
 			if instance.KeyName != nil {

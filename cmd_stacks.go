@@ -93,7 +93,7 @@ func (sc *stacksCommand) Execute(args []string) int {
 
 	//
 	// Now invoke our callback - this will call the function
-	// "Search" once if we're not running with a role-file,
+	// "DisplayStacks" once if we're not running with a role-file,
 	// otherwise once for each role.
 	//
 	errs := utils.HandleRoles(session, sc.rolesPath, sc.DisplayStacks, nil)
