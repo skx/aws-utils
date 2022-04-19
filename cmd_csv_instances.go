@@ -77,8 +77,7 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 	// Get the running instances.
 	ret, err := instances.GetInstances(svc, acct)
 	if err != nil {
-		//	return err
-		fmt.Sprintf("OK")
+		return err
 	}
 
 	// Get the format-string
