@@ -57,7 +57,7 @@ Please specify a valid subcommand, choices are:
 	rotate-keys     Rotate your AWS access keys.
 	sg-grep         Security-Group Grep
 	stacks          List all cloudformation stack-names.
-    subnets         List subnets in all VPCs.
+	subnets         List subnets in all VPCs.
 	version         Show the version of this binary.
 	whitelist-self  Update security-groups with your external IP.
 	whoami          Show the current AWS user or role name.
