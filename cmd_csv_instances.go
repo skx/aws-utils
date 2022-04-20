@@ -5,8 +5,10 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/skx/aws-utils/instances"
@@ -28,12 +30,16 @@ type csvInstancesCommand struct {
 
 	// Format string to print
 	format string
+
+	// Filter to show only matching lines
+	filter string
 }
 
 // Arguments adds per-command args to the object.
 func (c *csvInstancesCommand) Arguments(f *flag.FlagSet) {
 	f.StringVar(&c.rolesPath, "roles", "", "Path to a list of roles to process, one by one")
 	f.StringVar(&c.format, "format", "", "Format string of the fields to print")
+	f.StringVar(&c.filter, "filter", "", "Only show lines matching this regular expression")
 }
 
 // Info returns the name of this subcommand.
@@ -252,52 +258,71 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 			c.header = true
 		}
 
+		// Buffer for this line of output
+		var line bytes.Buffer
+
 		// Show each field
 		for i, field := range fields {
 
 			switch field {
 			case "account":
-				fmt.Printf("%s", acct)
+				line.WriteString(acct)
 			case "ami":
-				fmt.Printf("%s", obj.InstanceAMI)
+				line.WriteString(obj.InstanceAMI)
 			case "amiage":
-				fmt.Printf("%d", obj.AMIAge)
+				line.WriteString(fmt.Sprintf("%d", obj.AMIAge))
 			case "az":
-				fmt.Printf("%s", obj.AvailabilityZone)
+				line.WriteString(obj.AvailabilityZone)
 			case "id":
-				fmt.Printf("%s", obj.InstanceID)
+				line.WriteString(obj.InstanceID)
 			case "name":
-				fmt.Printf("%s", obj.InstanceName)
+				line.WriteString(obj.InstanceName)
 			case "privateipv4":
-				fmt.Printf("%s", obj.PrivateIPv4)
+				line.WriteString(obj.PrivateIPv4)
 			case "publicipv4":
-				fmt.Printf("%s", obj.PublicIPv4)
+				line.WriteString(obj.PublicIPv4)
 			case "ssh-key":
-				fmt.Printf("%s", obj.SSHKeyName)
+				line.WriteString(obj.SSHKeyName)
 			case "state":
-				fmt.Printf("%s", obj.InstanceState)
+				line.WriteString(obj.InstanceState)
 			case "subnet":
-				fmt.Printf("%s", subnets[obj.SubnetID])
+				line.WriteString(subnets[obj.SubnetID])
 			case "subnetid":
-				fmt.Printf("%s", obj.SubnetID)
+				line.WriteString(obj.SubnetID)
 			case "type":
-				fmt.Printf("%s", obj.InstanceType)
+				line.WriteString(obj.InstanceType)
 			case "vpc":
-				fmt.Printf("%s", vpcs[obj.VPCID])
+				line.WriteString(vpcs[obj.VPCID])
 			case "vpcid":
-				fmt.Printf("%s", obj.VPCID)
+				line.WriteString(obj.VPCID)
 			default:
 				fmt.Printf("unknown field:%s", field)
 			}
 
 			// if this isn't the last one, add ","
 			if i < len(fields)-1 {
-				fmt.Printf(",")
+				line.WriteString(",")
+			}
+		}
+
+		show := true
+
+		// Should we filter this line out?
+		if c.filter != "" {
+			// If it doesn't match then skip it.
+			match, er := regexp.MatchString(c.filter, line.String())
+			if er != nil {
+				return fmt.Errorf("error running regexp match of %s against %s: %s", c.filter, line.String(), er)
+			}
+			if !match {
+				show = false
 			}
 		}
 
 		// Newline between records
-		fmt.Printf("\n")
+		if show {
+			fmt.Printf("%s\n", line.String())
+		}
 
 	}
 	return nil
