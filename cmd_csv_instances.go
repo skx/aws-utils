@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/skx/aws-utils/instances"
+	"github.com/skx/aws-utils/tag2name"
 	"github.com/skx/aws-utils/utils"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
@@ -67,9 +69,11 @@ Valid fields are
 * "publicipv4" - The (public) IPv4 address associated with the instance.
 * "ssh-key" - The SSH key setup for this instance.
 * "state" - The instance state (running, pending, etc).
-* "subnetid" - The subnet within which the instance is running.
+* "subnet" - The name of the subnet within which the instance is running.
+* "subnetid" - The ID of the subnet within which the instance is running.
 * "type" - The instance type (t2.small, t3.large, etc).
-* "vpcid" - The VPC within which the instance is running.
+* "vpc" - The name of the VPC within which the instance is running.
+* "vpcid" - The ID of the VPC within which the instance is running.
 `
 
 }
@@ -89,6 +93,14 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 		format = "account,id,name,ami"
 	}
 
+	// Map of subnet names to IDs.
+	var subnets map[string]string
+	fetchSubnets := false
+
+	// Map of VPC names to IDs
+	var vpcs map[string]string
+	fetchVPCs := false
+
 	// Split the fields, by comma
 	supplied := strings.Split(format, ",")
 
@@ -98,6 +110,90 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 		field = strings.TrimSpace(field)
 		field = strings.ToLower(field)
 		fields = append(fields, field)
+
+		// Do we need to fetch subnet information?
+		if field == "subnet" {
+			fetchSubnets = true
+		}
+		if field == "vpc" {
+			fetchVPCs = true
+		}
+	}
+
+	// Fetch the subnets within the account, if we're going
+	// to display the human-readable name.
+	if fetchSubnets {
+
+		// An empty filter, to get all subnets
+		input := &ec2.DescribeSubnetsInput{
+			Filters: []*ec2.Filter{
+				{},
+			},
+		}
+
+		// describe the subnets
+		result, err := svc.DescribeSubnets(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				default:
+					fmt.Println(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return fmt.Errorf("failed to get subnets for account %s", acct)
+		}
+
+		// fill up our map
+		subnets = make(map[string]string)
+
+		// populate it with "id -> name"
+		for i := range result.Subnets {
+			// Get the name, via tags, if present
+			name := tag2name.Lookup(result.Subnets[i].Tags, "unnamed")
+			subnets[*result.Subnets[i].SubnetId] = name
+		}
+	}
+
+	// Fetch the VPCs within the account, if we're going
+	// to display the human-readable name.
+	if fetchVPCs {
+
+		// An empty filter, to get all subnets
+		input := &ec2.DescribeVpcsInput{
+			Filters: []*ec2.Filter{
+				{},
+			},
+		}
+
+		// describe the vpcs
+		result, err := svc.DescribeVpcs(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				default:
+					fmt.Println(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return fmt.Errorf("failed to get VPCs for account %s", acct)
+		}
+
+		// fill up our map
+		vpcs = make(map[string]string)
+
+		// populate it with "id -> name"
+		for i := range result.Vpcs {
+			// Get the name, via tags, if present
+			name := tag2name.Lookup(result.Vpcs[i].Tags, "unnamed")
+			vpcs[*result.Vpcs[i].VpcId] = name
+		}
 	}
 
 	// For each instance we've discovered
@@ -130,10 +226,14 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 					fmt.Printf("SSH Key")
 				case "state":
 					fmt.Printf("Instance State")
+				case "subnet":
+					fmt.Printf("Subnet")
 				case "subnetid":
 					fmt.Printf("Subnet ID")
 				case "type":
 					fmt.Printf("Instance Type")
+				case "vpc":
+					fmt.Printf("VPC")
 				case "vpcid":
 					fmt.Printf("VPC ID")
 				default:
@@ -176,10 +276,14 @@ func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{
 				fmt.Printf("%s", obj.SSHKeyName)
 			case "state":
 				fmt.Printf("%s", obj.InstanceState)
+			case "subnet":
+				fmt.Printf("%s", subnets[obj.SubnetID])
 			case "subnetid":
 				fmt.Printf("%s", obj.SubnetID)
 			case "type":
 				fmt.Printf("%s", obj.InstanceType)
+			case "vpc":
+				fmt.Printf("%s", vpcs[obj.VPCID])
 			case "vpcid":
 				fmt.Printf("%s", obj.VPCID)
 			default:
