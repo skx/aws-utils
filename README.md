@@ -140,13 +140,12 @@ The following sub-commands are available:
 
 ### `csv-instances`
 
-Export a simple CSV-based list of running instances:
+Output a list of running instances, as CSV.  The output may be changed, but by default we show:
 
 * Account ID
 * Instance ID
 * Instance Name
 * AMI ID
-* Age of AMI in days
 
 Usage:
 
@@ -154,11 +153,19 @@ Usage:
 $ aws-utils csv-instances [-roles=/path/to/roles]
 ```
 
+The fields displayed may be changed via the `format` argument, for example:
+
+```sh
+$ aws-utils csv-instances --format="name,id,subnet,subnetid,vpc,vpcid"
+```
+
+The list of available field-names can be viewed via `aws-utils help csv-instances`.
 
 
 ### `instances`
 
-Show a human-friendly list of all the EC2 instances you have running.
+Show a human-readable list of all the EC2 instances you have running, along
+with details of the volumes associated with each instance.
 
 Sample output:
 
@@ -180,12 +187,20 @@ Usage:
 $ aws-utils instances [-json] [-roles=/path/to/roles]
 ```
 
+The output is defined by a simple golang template.  If you wish to change the template you can do so:
+
+```sh
+$ aws-utils instances -dump-template > foo.tmpl
+$ vi foo.tmpl
+$ aws-utils instances -template=./foo.tmpl
+```
+
 
 ### `orphaned-zones`
 
 This sub-command examines all domains which have DNS hosted in Route53,
-and reports those which have nameservers configured which are __not__
-belonging to AWS.
+and reports those which have nameservers configured which do __not__
+belong to AWS.
 
 This is designed to identify domains which have expired, or had their
 DNS-hosting moved to an external system (such as cloudflare, or similar).
