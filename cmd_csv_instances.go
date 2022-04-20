@@ -5,13 +5,17 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"regexp"
+	"strings"
 
-	"github.com/skx/aws-utils/amiage"
+	"github.com/skx/aws-utils/instances"
+	"github.com/skx/aws-utils/tag2name"
 	"github.com/skx/aws-utils/utils"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
@@ -23,11 +27,19 @@ type csvInstancesCommand struct {
 
 	// Have we shown the CSV header?
 	header bool
+
+	// Format string to print
+	format string
+
+	// Filter to show only matching lines
+	filter string
 }
 
 // Arguments adds per-command args to the object.
 func (c *csvInstancesCommand) Arguments(f *flag.FlagSet) {
 	f.StringVar(&c.rolesPath, "roles", "", "Path to a list of roles to process, one by one")
+	f.StringVar(&c.format, "format", "", "Format string of the fields to print")
+	f.StringVar(&c.filter, "filter", "", "Only show lines matching this regular expression")
 }
 
 // Info returns the name of this subcommand.
@@ -39,80 +51,279 @@ Details:
 This command exports a list of the running instances which are available
 to the logged in account, in CSV format.
 
-The export contains:
+By default the export contains the following fields:
 
 * Account ID
 * Instance ID
 * Instance Name
 * AMI ID
-* Age of AMI in days
 
-Other fields might be added in the future.
+You can specify a different output via the 'format' argument, for
+example:
+
+     aws-utils csv-instances --format="account,id,name,ipv4address"
+
+Valid fields are
+
+* "account" - The AWS account-number.
+* "az" - The availability zone within which the instance is running.
+* "ami" - The AMI name of the running instance.
+* "amiage" - The age of the AMI in days.
+* "id" - The instance ID.
+* "name" - The instance name, as set via tags.
+* "privateipv4" - The (private) IPv4 address associated with the instance.
+* "publicipv4" - The (public) IPv4 address associated with the instance.
+* "ssh-key" - The SSH key setup for this instance.
+* "state" - The instance state (running, pending, etc).
+* "subnet" - The name of the subnet within which the instance is running.
+* "subnetid" - The ID of the subnet within which the instance is running.
+* "type" - The instance type (t2.small, t3.large, etc).
+* "vpc" - The name of the VPC within which the instance is running.
+* "vpcid" - The ID of the VPC within which the instance is running.
 `
 
 }
 
-// Sync from remote to local
+// DumpCSV outputs the list of running instances.
 func (c *csvInstancesCommand) DumpCSV(svc *ec2.EC2, acct string, void interface{}) error {
 
-	// Get the instances which are running/pending
-	params := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("instance-state-name"),
-				Values: []*string{aws.String("running"), aws.String("pending")},
-			},
-		},
-	}
-
-	// Create new EC2 client
-	result, err := svc.DescribeInstances(params)
+	// Get the running instances.
+	ret, err := instances.GetInstances(svc, acct)
 	if err != nil {
-		return fmt.Errorf("DescribeInstances failed: %s", err)
+		return err
 	}
 
-	// For each instance show stuff
-	for _, reservation := range result.Reservations {
-		for _, instance := range reservation.Instances {
+	// Get the format-string
+	format := c.format
+	if format == "" {
+		format = "account,id,name,ami"
+	}
 
-			// We have a running EC2 instnace.
+	// Map of subnet names to IDs.
+	var subnets map[string]string
+	fetchSubnets := false
 
-			// Collect the data we want
-			id := *instance.InstanceId
+	// Map of VPC names to IDs
+	var vpcs map[string]string
+	fetchVPCs := false
 
-			// Find the name.
-			name := *instance.InstanceId
+	// Split the fields, by comma
+	supplied := strings.Split(format, ",")
 
-			// Look for the name, which is set via a Tag.
-			i := 0
-			for i < len(instance.Tags) {
+	// Ensure all fields are lower-cased and stripped of spaces
+	fields := []string{}
+	for _, field := range supplied {
+		field = strings.TrimSpace(field)
+		field = strings.ToLower(field)
+		fields = append(fields, field)
 
-				if *instance.Tags[i].Key == "Name" {
-					name = *instance.Tags[i].Value
-				}
-				i++
-			}
-
-			// AMI name
-			ami := *instance.ImageId
-
-			// Get the AMI age, in days.
-			age, ageErr := amiage.AMIAge(svc, ami)
-			if ageErr != nil {
-				return fmt.Errorf("error getting AMI age for %s: %s", ami, ageErr)
-			}
-
-			if !c.header {
-				fmt.Printf("Account, Instance ID, Name, AMI, AMI Age\n")
-				c.header = true
-			}
-
-			//
-			// Now show all the information in CSV format
-			//
-			fmt.Printf("%s,%s,%s,%s,%d\n", acct, id, name, ami, age)
-
+		// Do we need to fetch subnet information?
+		if field == "subnet" {
+			fetchSubnets = true
 		}
+		if field == "vpc" {
+			fetchVPCs = true
+		}
+	}
+
+	// Fetch the subnets within the account, if we're going
+	// to display the human-readable name.
+	if fetchSubnets {
+
+		// An empty filter, to get all subnets
+		input := &ec2.DescribeSubnetsInput{
+			Filters: []*ec2.Filter{
+				{},
+			},
+		}
+
+		// describe the subnets
+		result, err := svc.DescribeSubnets(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				default:
+					fmt.Println(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return fmt.Errorf("failed to get subnets for account %s", acct)
+		}
+
+		// fill up our map
+		subnets = make(map[string]string)
+
+		// populate it with "id -> name"
+		for i := range result.Subnets {
+			// Get the name, via tags, if present
+			name := tag2name.Lookup(result.Subnets[i].Tags, "unnamed")
+			subnets[*result.Subnets[i].SubnetId] = name
+		}
+	}
+
+	// Fetch the VPCs within the account, if we're going
+	// to display the human-readable name.
+	if fetchVPCs {
+
+		// An empty filter, to get all subnets
+		input := &ec2.DescribeVpcsInput{
+			Filters: []*ec2.Filter{
+				{},
+			},
+		}
+
+		// describe the vpcs
+		result, err := svc.DescribeVpcs(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				default:
+					fmt.Println(aerr.Error())
+				}
+			} else {
+				// Print the error, cast err to awserr.Error to get the Code and
+				// Message from an error.
+				fmt.Println(err.Error())
+			}
+			return fmt.Errorf("failed to get VPCs for account %s", acct)
+		}
+
+		// fill up our map
+		vpcs = make(map[string]string)
+
+		// populate it with "id -> name"
+		for i := range result.Vpcs {
+			// Get the name, via tags, if present
+			name := tag2name.Lookup(result.Vpcs[i].Tags, "unnamed")
+			vpcs[*result.Vpcs[i].VpcId] = name
+		}
+	}
+
+	// For each instance we've discovered
+	for _, obj := range ret {
+
+		// If we've not printed the header..
+		if !c.header {
+
+			// Show something human-readable
+			for i, field := range fields {
+
+				switch field {
+				case "account":
+					fmt.Printf("Account ID")
+				case "ami":
+					fmt.Printf("AMI ID")
+				case "amiage":
+					fmt.Printf("AMI Age")
+				case "az":
+					fmt.Printf("Availability Zone")
+				case "id":
+					fmt.Printf("Instance ID")
+				case "name":
+					fmt.Printf("Name")
+				case "privateipv4":
+					fmt.Printf("PrivateIPv4")
+				case "publicipv4":
+					fmt.Printf("PublicIPv4")
+				case "ssh-key":
+					fmt.Printf("SSH Key")
+				case "state":
+					fmt.Printf("Instance State")
+				case "subnet":
+					fmt.Printf("Subnet")
+				case "subnetid":
+					fmt.Printf("Subnet ID")
+				case "type":
+					fmt.Printf("Instance Type")
+				case "vpc":
+					fmt.Printf("VPC")
+				case "vpcid":
+					fmt.Printf("VPC ID")
+				default:
+					fmt.Printf("unknown field:%s", field)
+				}
+
+				// if this isn't the last one, add ","
+				if i < len(fields)-1 {
+					fmt.Printf(",")
+				}
+
+			}
+
+			// Terminate the header with a newline
+			fmt.Printf("\n")
+			c.header = true
+		}
+
+		// Buffer for this line of output
+		var line bytes.Buffer
+
+		// Show each field
+		for i, field := range fields {
+
+			switch field {
+			case "account":
+				line.WriteString(acct)
+			case "ami":
+				line.WriteString(obj.InstanceAMI)
+			case "amiage":
+				line.WriteString(fmt.Sprintf("%d", obj.AMIAge))
+			case "az":
+				line.WriteString(obj.AvailabilityZone)
+			case "id":
+				line.WriteString(obj.InstanceID)
+			case "name":
+				line.WriteString(obj.InstanceName)
+			case "privateipv4":
+				line.WriteString(obj.PrivateIPv4)
+			case "publicipv4":
+				line.WriteString(obj.PublicIPv4)
+			case "ssh-key":
+				line.WriteString(obj.SSHKeyName)
+			case "state":
+				line.WriteString(obj.InstanceState)
+			case "subnet":
+				line.WriteString(subnets[obj.SubnetID])
+			case "subnetid":
+				line.WriteString(obj.SubnetID)
+			case "type":
+				line.WriteString(obj.InstanceType)
+			case "vpc":
+				line.WriteString(vpcs[obj.VPCID])
+			case "vpcid":
+				line.WriteString(obj.VPCID)
+			default:
+				fmt.Printf("unknown field:%s", field)
+			}
+
+			// if this isn't the last one, add ","
+			if i < len(fields)-1 {
+				line.WriteString(",")
+			}
+		}
+
+		show := true
+
+		// Should we filter this line out?
+		if c.filter != "" {
+			// If it doesn't match then skip it.
+			match, er := regexp.MatchString(c.filter, line.String())
+			if er != nil {
+				return fmt.Errorf("error running regexp match of %s against %s: %s", c.filter, line.String(), er)
+			}
+			if !match {
+				show = false
+			}
+		}
+
+		// Newline between records
+		if show {
+			fmt.Printf("%s\n", line.String())
+		}
+
 	}
 	return nil
 }

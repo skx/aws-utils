@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/skx/aws-utils/tag2name"
 	"github.com/skx/aws-utils/utils"
 )
 
@@ -53,7 +54,7 @@ func (sc *subnetsCommand) Execute(args []string) int {
 
 	//
 	// Now invoke our callback - this will call the function
-	// "Search" once if we're not running with a role-file,
+	// "DisplaySubnets" once if we're not running with a role-file,
 	// otherwise once for each role.
 	//
 	errs := utils.HandleRoles(session, sc.rolesPath, sc.DisplaySubnets, nil)
@@ -102,15 +103,7 @@ func (sc *subnetsCommand) DisplaySubnets(svc *ec2.EC2, account string, void inte
 	for i := range result.Subnets {
 
 		// Get the name, via tags, if present
-		name := "unnamed"
-		n := 0
-		for _, tag := range result.Subnets[i].Tags {
-
-			if *tag.Key == "Name" {
-				name = *tag.Value
-			}
-			n++
-		}
+		name := tag2name.Lookup(result.Subnets[i].Tags, "unnamed")
 
 		// Show the details
 		if !sc.header {
