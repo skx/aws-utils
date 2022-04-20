@@ -3,6 +3,7 @@
 package instances
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -131,7 +132,9 @@ func GetInstances(svc *ec2.EC2, acct string) ([]InstanceOutput, error) {
 			// Get the AMI age, in days.
 			out.AMIAge, err = amiage.AMIAge(svc, out.InstanceAMI)
 			if err != nil {
-				return ret, fmt.Errorf("error getting AMI age for %s: %s", out.InstanceAMI, err)
+				if !errors.Is(err, amiage.NotFound) {
+					return ret, fmt.Errorf("error getting AMI age for %s: %s", out.InstanceAMI, err)
+				}
 			}
 
 			// Look for the name, which is set via a Tag.

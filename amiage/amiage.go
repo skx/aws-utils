@@ -5,6 +5,7 @@
 package amiage
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,9 +16,13 @@ import (
 // Cache of creation-time/date
 var cache map[string]string
 
+// NotFound is the error returned when an AMI isn't found
+var NotFound error
+
 // init ensures that our cache is initialized
 func init() {
 	cache = make(map[string]string)
+	NotFound = fmt.Errorf("not-found")
 }
 
 // AMICreation returns the creation-date of the given AMI as a string.
@@ -39,15 +44,16 @@ func AMICreation(svc *ec2.EC2, id string) (string, error) {
 		},
 	}
 
-	// Run the search
+	// Run the search, return NotFound if we got an error.
+	//
+	// Yes we're losing the "real" error here, but logically we've not found the
+	// details we want, so it's a not-found.
 	result, err := svc.DescribeImages(input)
 	if err != nil {
-		// Message from an error.
-		return "", fmt.Errorf("error calling DescribeImages: %s", err.Error())
+		return "", NotFound
 	}
 
-	// If we got a result then we can return the creation time
-	// (as a string)
+	// If we got a result then we can return the creation time (as a string)
 	if len(result.Images) > 0 {
 
 		// But save in a cache for the future
@@ -55,7 +61,9 @@ func AMICreation(svc *ec2.EC2, id string) (string, error) {
 		cache[id] = date
 		return date, nil
 	}
-	return "", fmt.Errorf("no creation date for AMI %s", id)
+
+	// No result found
+	return "", NotFound
 }
 
 // AMIAge returns the number of days since the specified image was created,
@@ -67,7 +75,12 @@ func AMIAge(svc *ec2.EC2, id string) (int, error) {
 	//
 	create, err := AMICreation(svc, id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get creation date of %s: %s", id, err.Error())
+
+		// If this is "Not Found" then return -1
+		if errors.Is(err, NotFound) {
+			return -1, err
+		}
+		return -2, fmt.Errorf("failed to get creation date of %s: %s", id, err.Error())
 	}
 
 	//
@@ -76,7 +89,7 @@ func AMIAge(svc *ec2.EC2, id string) (int, error) {
 	//
 	t, err := time.Parse("2006-01-02T15:04:05.000Z", create)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse time string %s: %s", create, err)
+		return -3, fmt.Errorf("failed to parse time string %s: %s", create, err)
 	}
 
 	//
