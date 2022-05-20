@@ -24,8 +24,11 @@ import (
 // Structure for our options and state.
 type rotateKeysCommand struct {
 
-	// Should we force deletion of old keys?
+	// Should we force deletion of old keys without prompting?
 	Force bool
+
+	// Should we explicitly remove orphaned keys
+	Cleanup bool
 
 	// Configuration path, defaults to ~/.aws/credentials
 	Path string
@@ -34,6 +37,7 @@ type rotateKeysCommand struct {
 // Arguments adds per-command args to the object.
 func (r *rotateKeysCommand) Arguments(f *flag.FlagSet) {
 
+	f.BoolVar(&r.Cleanup, "cleanup", false, "Should we remove orphaned keys, automatically?")
 	f.BoolVar(&r.Force, "force", false, "Should we force removal of old keys without prompting?")
 	f.StringVar(&r.Path, "path", "", "The location of the configuration file to modify?")
 
@@ -165,10 +169,21 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 		return 1
 	}
 
-	// More than one key?
+	// Keep track of any deleted keys here.
+	deleted := []string{}
+
+	// AWS only allows two keys, at the most.
+	//
+	// If there is one key then we just create a new one, meaning
+	// we have hit the limit - and that's OK.
+	//
+	// If there were previously two keys already present then we
+	// have to remove one before we can create the new replacement//
+	//
+	// Look for more than one?
 	if len(keys.AccessKeyMetadata) > 1 {
 
-		// If we're not forcing ..
+		// If we're not forcing..
 		if !r.Force {
 
 			// Then ensure the user confirms removal.
@@ -179,7 +194,7 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 			}
 		}
 
-		// Now remove the older key.
+		// Remove the older key.
 		_, err = iamClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{
 			AccessKeyId: keys.AccessKeyMetadata[0].AccessKeyId,
 		})
@@ -190,6 +205,14 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 			return 1
 		}
 
+		deleted = append(deleted, *keys.AccessKeyMetadata[0].AccessKeyId)
+
+		// At this point we've changed:
+		//
+		// There were two keys - the maximum.
+		//
+		// We've now removed one, which means we have room to create
+		// a new one.
 	}
 
 	// Open the existing credentials file
@@ -200,10 +223,10 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 	}
 	defer file.Close()
 
-	// Create a new key now.
+	// Actually create the new key now.
 	created, err := iamClient.CreateAccessKey(&iam.CreateAccessKeyInput{})
 	if err != nil {
-		fmt.Printf("error creating new keys: %s\n", err)
+		fmt.Printf("error creating the new key: %s\n", err)
 		return 1
 	}
 
@@ -213,7 +236,7 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 	for scanner.Scan() {
 		content = append(content, scanner.Text())
 	}
-	if err := scanner.Err(); err != nil {
+	if err = scanner.Err(); err != nil {
 		fmt.Printf("error processing the config file: %s\n", err)
 		return 1
 	}
@@ -235,7 +258,7 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 		if !awsAccessKeyID && strings.HasPrefix(line, "aws_access_key_id") {
 
 			// only update the first one
-			_, err := out.WriteString("aws_access_key_id=" + *created.AccessKey.AccessKeyId + "\n")
+			_, err = out.WriteString("aws_access_key_id=" + *created.AccessKey.AccessKeyId + "\n")
 			if err != nil {
 				fmt.Printf("error writing to file:%s\n", err.Error())
 				return 1
@@ -246,7 +269,7 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 
 		// Update in-place
 		if !awsSecretAccessKeyID && strings.HasPrefix(line, "aws_secret_access_key") {
-			_, err := out.WriteString("aws_secret_access_key=" + *created.AccessKey.SecretAccessKey + "\n")
+			_, err = out.WriteString("aws_secret_access_key=" + *created.AccessKey.SecretAccessKey + "\n")
 			if err != nil {
 				fmt.Printf("error writing to file:%s\n", err.Error())
 				return 1
@@ -257,7 +280,7 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 		}
 
 		// Otherwise copy the old line into place.
-		_, err := out.WriteString(line + "\n")
+		_, err = out.WriteString(line + "\n")
 		if err != nil {
 			fmt.Printf("error writing to file:%s\n", err.Error())
 			return 1
@@ -267,6 +290,53 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 
 	// Close the output file
 	out.Close()
+
+	// At this point we've created a new key, and handled the
+	// update of the users configuration file.
+	//
+	// If we're going to clean any orphaned keys we should do that now.
+	if r.Cleanup {
+
+		// We previous retrieved the keys when we started,
+		// so loop over those.
+		//
+		// Any key that is present there should be removed.
+		for _, key := range(keys.AccessKeyMetadata)		{
+
+			fmt.Printf("Removing orphaned key: %s", *key.AccessKeyId)
+
+			// Did we already delete this key?
+			removed := false
+
+			for _, cur := range deleted {
+				if cur == *key.AccessKeyId {
+					removed = true
+				}
+			}
+
+			// Delete the key, if not previously done.
+			if removed {
+				fmt.Printf(" - Already removed as part of rotation")
+			} else {
+
+				_, err = iamClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{
+					AccessKeyId: key.AccessKeyId,
+				})
+
+				// Failure to delete the key is unfortunate,
+				// but it isn't terminal.
+				//
+				// We have after all already created a new
+				// key and updated the users' config to use it.
+				if err != nil {
+					fmt.Printf(" - Failure: %s", err.Error())
+				}
+			}
+
+			// newline at the end of the output.
+			fmt.Printf("\n")
+		}
+	}
 
 	return 0
 }
