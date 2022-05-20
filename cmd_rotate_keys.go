@@ -169,6 +169,9 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 		return 1
 	}
 
+	// Keep track of any deleted keys here.
+	deleted := []string{}
+
 	// AWS only allows two keys, at the most.
 	//
 	// If there is one key then we just create a new one, meaning
@@ -201,6 +204,8 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 			fmt.Printf("error deleting oldest key: %s\n", err)
 			return 1
 		}
+
+		deleted = append(deleted, *keys.AccessKeyMetadata[0].AccessKeyId)
 
 		// At this point we've changed:
 		//
@@ -300,18 +305,32 @@ func (r *rotateKeysCommand) Execute(args []string) int {
 
 			fmt.Printf("Removing orphaned key: %s", *key.AccessKeyId)
 
-			// Delete the key
-			_, err = iamClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{
-				AccessKeyId: key.AccessKeyId,
-			})
+			// Did we already delete this key?
+			removed := false
 
-			if err != nil {
+			for _, cur := range deleted {
+				if cur == *key.AccessKeyId {
+					removed = true
+				}
+			}
+
+			// Delete the key, if not previously done.
+			if removed {
+				fmt.Printf(" - Already removed as part of rotation")
+			} else {
+
+				_, err = iamClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{
+					AccessKeyId: key.AccessKeyId,
+				})
+
 				// Failure to delete the key is unfortunate,
 				// but it isn't terminal.
 				//
 				// We have after all already created a new
 				// key and updated the users' config to use it.
-				fmt.Printf(" - failed to remove %s", err.Error())
+				if err != nil {
+					fmt.Printf(" - Failure: %s", err.Error())
+				}
 			}
 
 			// newline at the end of the output.
