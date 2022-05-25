@@ -36,6 +36,7 @@ func main() {
 	//
 	subcommands.Register(&csvInstancesCommand{})
 	subcommands.Register(&instancesCommand{})
+	subcommands.Register(&ipCommand{})
 	subcommands.Register(&orphanedZonesCommand{})
 	subcommands.Register(&rotateKeysCommand{})
 	subcommands.Register(&sgGrepCommand{})

@@ -52,6 +52,7 @@ Please specify a valid subcommand, choices are:
 	commands        Show all available sub-commands.
 	csv-instances   Export a summary of running instances.
 	help            Show usage information.
+	ip              Show the private IP of the given instance.
 	instances       Export a summary of running instances.
 	orphaned-zones  Show orphaned Route53 zones.
 	rotate-keys     Rotate your AWS access keys.
@@ -126,6 +127,7 @@ The following sub-commands are available:
 
 * [csv-instances](#csv-instances)
 * [instances](#instances)
+* [ip](#ip)
 * [orphaned-zones](#orphaned-zones)
 * [rotate-keys](#rotate-keys)
 * [sg-grep](#sg-grep)
@@ -194,6 +196,22 @@ $ aws-utils instances -dump-template > foo.tmpl
 $ vi foo.tmpl
 $ aws-utils instances -template=./foo.tmpl
 ```
+
+
+
+### `ip`
+
+Show the private IPv4 address of the instance which matches the given
+regular expression.
+
+```sh
+$ aws-utils ip *live*manager
+10.13.14.32
+```
+
+This sub-command is useful for tab-completion against instance names, for
+connecting via SSH/RDP/similar.
+
 
 
 ### `orphaned-zones`
