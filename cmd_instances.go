@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"text/template"
 
@@ -147,7 +146,7 @@ func (i *instancesCommand) Execute(args []string) int {
 
 	// If the user specified a template-path then use it
 	if i.templatePath != "" {
-		content, err := ioutil.ReadFile(i.templatePath)
+		content, err := os.ReadFile(i.templatePath)
 		if err != nil {
 			fmt.Printf("failed to read %s:%s\n", i.templatePath, err.Error())
 			return 1

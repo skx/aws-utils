@@ -5,7 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 
@@ -132,7 +132,7 @@ func (i *whitelistSelfCommand) getIP() (string, error) {
 	defer req.Body.Close()
 
 	// Read the body
-	body, err := ioutil.ReadAll(req.Body)
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		return "", err
 	}
@@ -156,9 +156,8 @@ func (i *whitelistSelfCommand) getIP() (string, error) {
 //
 // 2.  If multiple entries exist with that description report a fatal error.
 //
-// 3.  If a single entry exists with the wrong IP, remove it and add the new
-//    IP.  Otherwise do nothing as the IP matches.
-//
+//  3. If a single entry exists with the wrong IP, remove it and add the new
+//     IP.  Otherwise do nothing as the IP matches.
 func (i *whitelistSelfCommand) processSG(svc *ec2.EC2, groupid, desc string, port int64) error {
 
 	// Get the contents of the security group.
@@ -334,7 +333,7 @@ func (i *whitelistSelfCommand) handleSecurityGroup(entry ToChange, sess *session
 func (i *whitelistSelfCommand) processRules(file string) error {
 
 	// Read the file
-	cnf, err := ioutil.ReadFile(file)
+	cnf, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("failed to read %s - %s", file, err)
 	}
