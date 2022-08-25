@@ -103,7 +103,7 @@ func (i *instancesCommand) DumpInstances(svc *ec2.EC2, acct string, void interfa
 			}
 			fmt.Println(string(b))
 		} else {
-			err = tmpl.Execute(os.Stdout, ret)
+			err = tmpl.Execute(os.Stdout, obj)
 			if err != nil {
 				return fmt.Errorf("error rendering template %s", err)
 			}
